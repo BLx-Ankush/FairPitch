@@ -42,7 +42,7 @@ FairPitch eliminates "black box" hackathon judging by providing transparent scor
 * **Cryptography:** Native browser Web Crypto API (`crypto.subtle.digest`)
 * **AI Diagnostic:** Google GenAI SDK (`@google/genai` — Gemini 2.5 Flash)
 * **Icons:** Lucide React
-* **Persistence:** Client-side `localStorage` (zero backend database, zero login required)
+* **Persistence:** Client-side `localStorage` (zero backend database, zero login required
 
 ---
 
