@@ -122,6 +122,22 @@ export function Header({
             {mode === 'demo' ? 'Reset Demo' : 'Reset Event'}
           </span>
         </button>
+
+        {/* Portal links */}
+        <div className="flex items-center gap-1.5 ml-1">
+          <a
+            href="/verify"
+            className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+          >
+            Verify
+          </a>
+          <a
+            href="/login"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-xs transition-colors"
+          >
+            Sign In
+          </a>
+        </div>
       </div>
     </header>
   );
