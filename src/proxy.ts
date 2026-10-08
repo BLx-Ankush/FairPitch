@@ -25,17 +25,16 @@ export async function proxy(request: NextRequest) {
   let institutionId: string | null = null
   let hasConsent = false
 
-  // Dev / Demo Cookie Support
-  const demoCookie = request.cookies.get('fairpitch_demo_user')?.value
-  if (!user && demoCookie) {
-    try {
-      const demoData = JSON.parse(demoCookie)
-      user = { id: demoData.id, email: demoData.email, isJury: demoData.isJury } as any
-      role = demoData.role || 'user'
-      organizerStatus = demoData.organizer_approval_status || 'none'
-      institutionId = demoData.institution_id || null
-      hasConsent = true
-    } catch {}
+  // Dev / Demo Cookie Support (only trusted if cryptographically signed and demo mode is allowed)
+  const { DEMO_COOKIE_NAME, verifyDemoCookie } = await import('@/lib/auth/demo-cookie')
+  const demoCookie = request.cookies.get(DEMO_COOKIE_NAME)?.value
+  const demoData = await verifyDemoCookie(demoCookie)
+  if (!user && demoData) {
+    user = { id: demoData.id, email: demoData.email, isJury: demoData.isJury } as any
+    role = demoData.role || 'user'
+    organizerStatus = demoData.organizer_approval_status || 'none'
+    institutionId = demoData.institution_id || null
+    hasConsent = true
   }
 
   const isPublicRoute =
@@ -44,14 +43,14 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/invite') ||
     pathname === '/unauthorized'
 
-  const isAuthRoute = pathname === '/login' || pathname === '/signup'
+  const isAuthRoute = pathname === '/login' || pathname === '/signup' || pathname === '/auth'
 
   // 3. Unauthenticated requests to protected paths
   if (!user) {
     if (isPublicRoute || isAuthRoute) {
       return getResponse()
     }
-    const redirectUrl = new URL('/login', request.url)
+    const redirectUrl = new URL('/auth', request.url)
     redirectUrl.searchParams.set('redirectTo', pathname)
     return NextResponse.redirect(redirectUrl)
   }
@@ -101,7 +100,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(homeUrl)
   }
 
-  // 6. Authenticated user visiting /login or /signup -> redirect to appropriate dashboard
+  // 6. Authenticated user visiting /login, /signup, or /auth -> redirect to appropriate dashboard
   if (isAuthRoute) {
     const dest =
       role === 'institution_admin' || role === 'platform_owner'
@@ -155,9 +154,9 @@ export async function proxy(request: NextRequest) {
     return getResponse()
   }
 
-  // /jury/* -> active jury event role or admin
+  // /jury/* -> active jury event role ONLY (admins are strictly barred from scoring to prevent score rigging)
   if (pathname.startsWith('/jury')) {
-    if (role === 'platform_owner' || role === 'institution_admin' || (user as any)?.isJury) {
+    if ((user as any)?.isJury) {
       return getResponse()
     }
 
@@ -177,12 +176,8 @@ export async function proxy(request: NextRequest) {
     return getResponse()
   }
 
-  // /team/* -> active participant or team member or admin
+  // /team/* -> active participant or team member only (admins and non-participant organizers are barred)
   if (pathname.startsWith('/team')) {
-    if (role === 'platform_owner' || role === 'institution_admin') {
-      return getResponse()
-    }
-
     const { data: teamRole } = await supabase
       .from('team_members')
       .select('id')
@@ -198,14 +193,18 @@ export async function proxy(request: NextRequest) {
 
     const isMember = (teamRole && teamRole.length > 0) || (participantEventRole && participantEventRole.length > 0)
 
-    if (!isMember) {
-      // Allow participant landing page if they haven't joined a team yet or are creating one
-      return getResponse()
+    // Admins and approved organizers who are not participants cannot enter participant team space
+    if ((role === 'platform_owner' || role === 'institution_admin' || organizerStatus === 'approved') && !isMember) {
+      const unauthUrl = new URL('/unauthorized', request.url)
+      unauthUrl.searchParams.set('reason', 'participant_only')
+      return NextResponse.redirect(unauthUrl)
     }
+
     return getResponse()
   }
 
   return getResponse()
+
 }
 
 // Backwards compatibility export

@@ -14,13 +14,14 @@ export async function getAuthUser() {
     if (!error && user) return user
   } catch {}
 
-  // Check demo cookie fallback
+  // Check signed demo cookie fallback (only valid in non-production with demo mode enabled)
   try {
     const { cookies } = await import('next/headers')
+    const { DEMO_COOKIE_NAME, verifyDemoCookie } = await import('@/lib/auth/demo-cookie')
     const cookieStore = await cookies()
-    const demoCookie = cookieStore.get('fairpitch_demo_user')?.value
-    if (demoCookie) {
-      const demoData = JSON.parse(demoCookie)
+    const demoCookie = cookieStore.get(DEMO_COOKIE_NAME)?.value
+    const demoData = await verifyDemoCookie(demoCookie)
+    if (demoData) {
       return {
         id: demoData.id,
         email: demoData.email,
@@ -49,25 +50,24 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     if (!error && data) return data as UserProfile
   } catch {}
 
-  // Check demo cookie fallback
+  // Check signed demo cookie fallback (only valid in non-production with demo mode enabled)
   try {
     const { cookies } = await import('next/headers')
+    const { DEMO_COOKIE_NAME, verifyDemoCookie } = await import('@/lib/auth/demo-cookie')
     const cookieStore = await cookies()
-    const demoCookie = cookieStore.get('fairpitch_demo_user')?.value
-    if (demoCookie) {
-      const demoData = JSON.parse(demoCookie)
-      if (demoData.id === userId) {
-        return {
-          id: demoData.id,
-          email: demoData.email,
-          full_name: demoData.full_name,
-          role: demoData.role,
-          organizer_approval_status: demoData.organizer_approval_status,
-          institution_id: demoData.institution_id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        } as UserProfile
-      }
+    const demoCookie = cookieStore.get(DEMO_COOKIE_NAME)?.value
+    const demoData = await verifyDemoCookie(demoCookie)
+    if (demoData && demoData.id === userId) {
+      return {
+        id: demoData.id,
+        email: demoData.email,
+        full_name: demoData.full_name,
+        role: demoData.role,
+        organizer_approval_status: demoData.organizer_approval_status,
+        institution_id: demoData.institution_id,
+        created_at: new Date(demoData.timestamp).toISOString(),
+        updated_at: new Date().toISOString(),
+      } as UserProfile
     }
   } catch {}
 

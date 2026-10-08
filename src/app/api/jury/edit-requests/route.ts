@@ -1,18 +1,16 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
+import { requireJury } from '@/lib/auth/guards'
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-      error: authErr,
-    } = await supabase.auth.getUser()
+    const auth = await requireJury()
+    if (auth.errorResponse) return auth.errorResponse
 
-    if (authErr || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const { user } = auth.caller
+    const supabase = await createClient()
+
 
     const { teamId, reason, requestedChanges } = await request.json()
 

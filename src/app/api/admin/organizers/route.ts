@@ -1,31 +1,38 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { requireInstitutionAdmin } from '@/lib/auth/guards'
 
 export async function GET() {
   try {
+    const auth = await requireInstitutionAdmin()
+    if (auth.errorResponse) return auth.errorResponse
+
+    const { user, profile } = auth.caller
+
+    // Demo fallback in dev
+    if ((user as any)?.email === 'admin@nexis.edu') {
+      return NextResponse.json({
+        success: true,
+        organizers: [
+          {
+            id: 'org-sample-1',
+            full_name: 'Aarav Patel',
+            email: 'aarav.p@nexis.edu',
+            organizer_approval_status: 'pending',
+            created_at: '2026-10-01T14:20:00Z',
+          },
+          {
+            id: 'b0000000-0000-0000-0000-000000000002',
+            full_name: 'Kavita Rao',
+            email: 'organizer@nexis.edu',
+            organizer_approval_status: 'approved',
+            created_at: '2026-09-20T10:00:00Z',
+          },
+        ],
+      })
+    }
+
     const supabase = await createClient()
-    const {
-      data: { user },
-      error: userErr,
-    } = await supabase.auth.getUser()
-
-    if (userErr || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Verify caller is institution_admin or platform_owner
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('institution_id, role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || (profile.role !== 'institution_admin' && profile.role !== 'platform_owner')) {
-      return NextResponse.json(
-        { error: 'Forbidden: Institution administrator access required' },
-        { status: 403 }
-      )
-    }
 
     // List organizers within caller's institution
     const query = supabase

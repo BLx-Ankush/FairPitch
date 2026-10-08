@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { requireEventOrganizer } from '@/lib/auth/guards'
 
 export async function POST(
   request: Request,
@@ -7,6 +8,10 @@ export async function POST(
 ) {
   try {
     const { id } = await params
+    const auth = await requireEventOrganizer(id)
+    if (auth.errorResponse) return auth.errorResponse
+    const user = auth.caller.user
+
     const { newStatus } = await request.json()
 
     if (!newStatus) {
@@ -14,14 +19,8 @@ export async function POST(
     }
 
     const supabase = await createClient()
-    const {
-      data: { user },
-      error: authErr,
-    } = await supabase.auth.getUser()
 
-    if (authErr || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+
 
     // Call database transition_event_status RPC
     const { data: updatedStatus, error: rpcErr } = await supabase.rpc(

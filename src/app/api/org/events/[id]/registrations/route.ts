@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
 import { getAuthUser } from '@/lib/auth/session'
 import { demoTeams, DEMO_EVENTS } from '@/lib/demo-store'
+import { requireEventOrganizer } from '@/lib/auth/guards'
 
 export async function GET(
   request: Request,
@@ -10,11 +11,11 @@ export async function GET(
 ) {
   try {
     const { id: eventId } = await params
-    const user = await getAuthUser()
+    const auth = await requireEventOrganizer(eventId)
+    if (auth.errorResponse) return auth.errorResponse
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const user = auth.caller.user
+
 
     if ((user as any)?.isDemo) {
       const demoEvent = DEMO_EVENTS.find((e) => e.id === eventId) || DEMO_EVENTS[0]

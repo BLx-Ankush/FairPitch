@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
 import { generateBalancedAssignments } from '@/lib/jury/matrix'
+import { requireEventOrganizer } from '@/lib/auth/guards'
 
 export async function GET(
   request: Request,
@@ -9,6 +10,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params
+    const auth = await requireEventOrganizer(id)
+    if (auth.errorResponse) return auth.errorResponse
+
     const supabase = await createClient()
 
     const { data: assignments, error } = await supabase
@@ -36,15 +40,11 @@ export async function POST(
 ) {
   try {
     const { id } = await params
-    const supabase = await createClient()
-    const {
-      data: { user },
-      error: authErr,
-    } = await supabase.auth.getUser()
+    const auth = await requireEventOrganizer(id)
+    if (auth.errorResponse) return auth.errorResponse
 
-    if (authErr || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const supabase = await createClient()
+
 
     const { data: event } = await supabase
       .from('events')

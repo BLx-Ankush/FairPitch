@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { requireEventOrganizer } from '@/lib/auth/guards'
 
 export async function GET(
   request: Request,
@@ -7,7 +8,11 @@ export async function GET(
 ) {
   try {
     const { id } = await params
+    const auth = await requireEventOrganizer(id)
+    if (auth.errorResponse) return auth.errorResponse
+
     const supabase = await createClient()
+
 
     const { data: requests, error } = await supabase
       .from('edit_requests')

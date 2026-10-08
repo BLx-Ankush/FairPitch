@@ -10,28 +10,27 @@ export async function GET() {
     } = await supabase.auth.getUser()
 
     if (userErr || !user) {
-      // Check for dev/demo user cookie
+      // Check for signed dev/demo user cookie (strictly guarded by environment & signature)
       const { cookies } = await import('next/headers')
+      const { DEMO_COOKIE_NAME, verifyDemoCookie } = await import('@/lib/auth/demo-cookie')
       const cookieStore = await cookies()
-      const demoCookie = cookieStore.get('fairpitch_demo_user')?.value
-      if (demoCookie) {
-        try {
-          const demoUser = JSON.parse(demoCookie)
-          return NextResponse.json({
-            authenticated: true,
-            user: { id: demoUser.id, email: demoUser.email },
-            profile: {
-              id: demoUser.id,
-              full_name: demoUser.full_name,
-              role: demoUser.role,
-              organizer_approval_status: demoUser.organizer_approval_status,
-              institution_id: demoUser.institution_id,
-            },
+      const demoCookie = cookieStore.get(DEMO_COOKIE_NAME)?.value
+      const demoUser = await verifyDemoCookie(demoCookie)
+      if (demoUser) {
+        return NextResponse.json({
+          authenticated: true,
+          user: { id: demoUser.id, email: demoUser.email },
+          profile: {
+            id: demoUser.id,
+            full_name: demoUser.full_name,
             role: demoUser.role,
-            organizerStatus: demoUser.organizer_approval_status,
-            institutionId: demoUser.institution_id,
-          })
-        } catch {}
+            organizer_approval_status: demoUser.organizer_approval_status,
+            institution_id: demoUser.institution_id,
+          },
+          role: demoUser.role,
+          organizerStatus: demoUser.organizer_approval_status,
+          institutionId: demoUser.institution_id,
+        })
       }
       return NextResponse.json({ error: 'Unauthorized', authenticated: false }, { status: 401 })
     }

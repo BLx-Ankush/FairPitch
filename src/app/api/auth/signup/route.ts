@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
+import { hashToken } from '@/lib/auth/tokens'
 
 export async function POST(request: Request) {
   try {
@@ -9,10 +10,9 @@ export async function POST(request: Request) {
       email,
       password,
       fullName,
-      accountType, // 'institution_admin' | 'organizer' | 'participant'
+      accountType, // 'participant' | 'organizer' | 'jury'
       institutionId,
-      institutionName,
-      institutionDomain,
+      inviteToken,
     } = body
 
     if (!email || !password || !fullName || !accountType) {
@@ -22,48 +22,113 @@ export async function POST(request: Request) {
       )
     }
 
+    // 1. Bar admin / platform_owner creation from public registration
+    if (accountType === 'institution_admin' || accountType === 'platform_owner') {
+      return NextResponse.json(
+        {
+          error:
+            'Institution administrator accounts cannot be created via public registration. Please use your platform owner activation link.',
+        },
+        { status: 403 }
+      )
+    }
+
+    if (!['participant', 'organizer', 'jury'].includes(accountType)) {
+      return NextResponse.json(
+        { error: 'Invalid account type. Allowed types are participant, organizer, or jury.' },
+        { status: 400 }
+      )
+    }
+
     const serviceClient = getServiceSupabase()
-    let assignedInstitutionId = institutionId || null
-    let globalRole: 'platform_owner' | 'institution_admin' | 'user' = 'user'
+    let assignedInstitutionId: string | null = null
+    let globalRole: 'user' = 'user'
     let organizerStatus: 'none' | 'pending' | 'approved' | 'rejected' = 'none'
+    let verifiedInvite: any = null
 
-    // Handle Institution Admin creation
-    if (accountType === 'institution_admin') {
-      globalRole = 'institution_admin'
-      organizerStatus = 'approved'
-
-      if (!assignedInstitutionId && institutionName) {
-        // Create new institution
-        const slug = institutionName
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-|-$/g, '')
-
-        const { data: inst, error: instErr } = await serviceClient
-          .from('institutions')
-          .insert({
-            name: institutionName,
-            slug: `${slug}-${Math.floor(Math.random() * 10000)}`,
-            domain: institutionDomain || null,
-            contact_email: email,
-          })
-          .select()
-          .single()
-
-        if (instErr) {
-          return NextResponse.json({ error: `Failed to create institution: ${instErr.message}` }, { status: 400 })
-        }
-        assignedInstitutionId = inst.id
-      }
-    } else if (accountType === 'organizer') {
+    // 2. Role-specific validation
+    if (accountType === 'participant') {
+      // Ignore any client-sent institutionId for participants
+      assignedInstitutionId = null
       globalRole = 'user'
-      organizerStatus = 'pending' // Held in pending approval state until institution admin approves
-    } else {
+      organizerStatus = 'none'
+    } else if (accountType === 'organizer') {
+      // Organizers must select an institution from the server-provided list and stay pending
+      if (!institutionId) {
+        return NextResponse.json(
+          { error: 'Please select an institution for your organizer application' },
+          { status: 400 }
+        )
+      }
+
+      // Verify that institution exists
+      const { data: inst, error: instErr } = await serviceClient
+        .from('institutions')
+        .select('id')
+        .eq('id', institutionId)
+        .single()
+
+      if (instErr || !inst) {
+        return NextResponse.json(
+          { error: 'Selected institution is invalid or does not exist' },
+          { status: 400 }
+        )
+      }
+
+      assignedInstitutionId = inst.id
+      globalRole = 'user'
+      organizerStatus = 'pending' // Must be approved by Institution Admin
+    } else if (accountType === 'jury') {
+      // Jury signup requires a valid, unexpired, unused invite token
+      if (!inviteToken) {
+        return NextResponse.json(
+          { error: 'A valid jury invitation token or code is required to register as a jury evaluator' },
+          { status: 400 }
+        )
+      }
+
+      const tokenHash = hashToken(inviteToken.trim())
+      const { data: invite, error: inviteErr } = await serviceClient
+        .from('invites')
+        .select('*')
+        .eq('token_hash', tokenHash)
+        .single()
+
+      if (inviteErr || !invite) {
+        return NextResponse.json(
+          { error: 'Invalid or unrecognized jury invitation token' },
+          { status: 404 }
+        )
+      }
+
+      if (invite.used_at) {
+        return NextResponse.json(
+          { error: 'This jury invitation has already been redeemed' },
+          { status: 410 }
+        )
+      }
+
+      if (new Date(invite.expires_at) < new Date()) {
+        return NextResponse.json(
+          { error: 'This jury invitation token has expired' },
+          { status: 410 }
+        )
+      }
+
+      if (invite.role !== 'jury') {
+        return NextResponse.json(
+          { error: 'This invitation is not designated for jury evaluation' },
+          { status: 400 }
+        )
+      }
+
+      verifiedInvite = invite
+      assignedInstitutionId = invite.institution_id
       globalRole = 'user'
       organizerStatus = 'none'
     }
 
-    // Sign up with Supabase Auth
+    // 3. Sign up with Supabase Auth
     const supabase = await createClient()
     const { data: authData, error: authErr } = await supabase.auth.signUp({
       email,
@@ -82,7 +147,7 @@ export async function POST(request: Request) {
       )
     }
 
-    // Insert or update profile via service role
+    // 4. Insert or update profile via service role
     const { error: profileErr } = await serviceClient
       .from('profiles')
       .upsert({
@@ -102,6 +167,24 @@ export async function POST(request: Request) {
       )
     }
 
+    // 5. If Jury signup, activate event role & mark invite token as redeemed
+    if (accountType === 'jury' && verifiedInvite) {
+      if (verifiedInvite.event_id) {
+        await serviceClient.from('event_roles').upsert({
+          user_id: authData.user.id,
+          event_id: verifiedInvite.event_id,
+          institution_id: verifiedInvite.institution_id,
+          role: 'jury',
+          status: 'active',
+        })
+      }
+
+      await serviceClient
+        .from('invites')
+        .update({ used_at: new Date().toISOString() })
+        .eq('id', verifiedInvite.id)
+    }
+
     return NextResponse.json({
       success: true,
       user: {
@@ -109,6 +192,7 @@ export async function POST(request: Request) {
         email: authData.user.email,
         role: globalRole,
         organizerStatus,
+        accountType,
       },
     })
   } catch (err: any) {
@@ -118,3 +202,4 @@ export async function POST(request: Request) {
     )
   }
 }
+

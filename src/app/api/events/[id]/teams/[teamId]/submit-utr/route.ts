@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
 import { validateUtrNumber } from '@/lib/payments/upi'
-
 import { getAuthUser } from '@/lib/auth/session'
 import { demoTeams } from '@/lib/demo-store'
+import { requireParticipant } from '@/lib/auth/guards'
 
 export async function POST(
   request: Request,
@@ -12,11 +12,11 @@ export async function POST(
 ) {
   try {
     const { id: eventId, teamId } = await params
-    const user = await getAuthUser()
+    const auth = await requireParticipant(teamId, eventId)
+    if (auth.errorResponse) return auth.errorResponse
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const user = auth.caller.user
+
 
     const body = await request.json()
     const { utr } = body

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
 import { getAuthUser } from '@/lib/auth/session'
 import { demoTeams } from '@/lib/demo-store'
+import { requireEventOrganizer } from '@/lib/auth/guards'
 
 export async function POST(
   request: Request,
@@ -10,11 +11,11 @@ export async function POST(
 ) {
   try {
     const { id: eventId, teamId } = await params
-    const user = await getAuthUser()
+    const auth = await requireEventOrganizer(eventId)
+    if (auth.errorResponse) return auth.errorResponse
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const user = auth.caller.user
+
 
     const body = await request.json()
     const { action = 'approve', note } = body

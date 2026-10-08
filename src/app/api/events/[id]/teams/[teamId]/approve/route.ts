@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
+import { requireEventOrganizer } from '@/lib/auth/guards'
 
 export async function POST(
   request: Request,
@@ -8,21 +9,15 @@ export async function POST(
 ) {
   try {
     const { id, teamId } = await params
+    const auth = await requireEventOrganizer(id)
+    if (auth.errorResponse) return auth.errorResponse
+
     const { status } = await request.json()
 
     if (!status || !['approved', 'rejected', 'pending'].includes(status)) {
       return NextResponse.json({ error: 'Valid status is required (approved, rejected, pending)' }, { status: 400 })
     }
 
-    const supabase = await createClient()
-    const {
-      data: { user },
-      error: authErr,
-    } = await supabase.auth.getUser()
-
-    if (authErr || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
     const serviceClient = getServiceSupabase()
     const { data: updated, error: updateErr } = await serviceClient

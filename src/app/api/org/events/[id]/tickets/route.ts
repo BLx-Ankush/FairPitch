@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { requireEventOrganizer } from '@/lib/auth/guards'
 
 export async function GET(
   request: Request,
@@ -7,32 +8,11 @@ export async function GET(
 ) {
   try {
     const { id: eventId } = await params
+    const auth = await requireEventOrganizer(eventId)
+    if (auth.errorResponse) return auth.errorResponse
+
     const supabase = await createClient()
 
-    const {
-      data: { user },
-      error: authErr,
-    } = await supabase.auth.getUser()
-
-    if (authErr || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Verify organizer permission
-    const { data: orgRole } = await supabase
-      .from('event_roles')
-      .select('role')
-      .eq('event_id', eventId)
-      .eq('user_id', user.id)
-      .in('role', ['admin', 'organizer'])
-      .maybeSingle()
-
-    if (!orgRole) {
-      return NextResponse.json(
-        { error: 'Forbidden: Organizer access required' },
-        { status: 403 }
-      )
-    }
 
     const { data: tickets, error: ticketErr } = await supabase
       .from('review_requests')
