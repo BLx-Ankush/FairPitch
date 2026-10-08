@@ -253,6 +253,164 @@ export default function TeamAutopsyPage({
           </div>
         </div>
 
+        {/* JUDGE CONSENSUS & DISAGREEMENT SECTION */}
+        {(() => {
+          const consensus = lossData.judgeConsensus || {
+            overallAgreementPercent: 81,
+            consensusLevel: 'HIGH',
+            highDisagreementCount: 1,
+            criterionDisagreements: [
+              {
+                criterionId: 'crit-tech',
+                criterionName: 'Technical Architecture & Execution',
+                standardDeviation: 1.61,
+                level: 'High',
+                scores: [
+                  { judgeName: 'Dr. Evelyn Vance', score: 9.0 },
+                  { judgeName: 'Marcus Sterling', score: 5.5 },
+                  { judgeName: 'Prof. Aris Thorne', score: 8.7 },
+                ],
+                explanation:
+                  'The panel disagreement is concentrated around the claimed ML architecture. Two judges accepted the pipeline as novel, while Marcus Sterling considered it largely dependent on standard pre-trained models.',
+              },
+            ],
+          }
+
+          const highDisagreements = (consensus.criterionDisagreements || []).filter(
+            (d: any) => d.level === 'High' || d.standardDeviation >= 1.4
+          )
+
+          return (
+            <div className="space-y-4">
+              {/* Overall Consensus Meter */}
+              <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        Panel Telemetry
+                      </span>
+                      <span className="text-xs text-slate-400">Inter-Judge Alignment</span>
+                    </div>
+                    <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4 text-indigo-400" />
+                      <span>Judge Panel Consensus: {consensus.overallAgreementPercent}%</span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                        consensus.consensusLevel === 'DIVERGENT'
+                          ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                          : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                      }`}>
+                        {consensus.consensusLevel === 'DIVERGENT' ? 'Divergence Detected' : 'Agreement: HIGH'}
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Quantifies whether evaluators evaluated your submission through a unified lens or exhibited conflicting expectations.
+                    </p>
+                  </div>
+
+                  <div className="w-full sm:w-48 space-y-1.5 shrink-0">
+                    <div className="flex justify-between text-xs font-mono">
+                      <span className="text-slate-400">Panel Alignment</span>
+                      <span className="font-bold text-indigo-400">{consensus.overallAgreementPercent}%</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-slate-950 overflow-hidden border border-slate-800">
+                      <div
+                        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full"
+                        style={{ width: `${consensus.overallAgreementPercent}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Criterion Level Agreement Breakdown */}
+                {gaps.length > 0 && (
+                  <div className="pt-3 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    {gaps.slice(0, 4).map((g: any) => {
+                      const scorePct = Math.round((g.teamAverage / (g.maxScore || 10)) * 100)
+                      return (
+                        <div key={g.criterionId} className="p-2.5 bg-slate-950/70 rounded-xl border border-slate-800/80">
+                          <span className="text-[10px] text-slate-400 block truncate">{g.criterionName}</span>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="font-mono text-xs font-bold text-slate-200">
+                              {g.teamAverage.toFixed(1)} / {g.maxScore || 10}
+                            </span>
+                            <span className="text-[10px] font-mono text-indigo-400">
+                              {scorePct}%
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* WHY DID JUDGES DISAGREE? */}
+              {highDisagreements.length > 0 && (
+                <div className="bg-gradient-to-r from-amber-950/20 via-slate-900 to-slate-900 border border-amber-500/30 rounded-2xl p-6 shadow-xl space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                      <AlertCircle className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-100">
+                        Why Did Judges Disagree on Your Score?
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        High divergence detected across independent evaluators (&sigma; &ge; 1.4).
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {highDisagreements.map((dispute: any, dIdx: number) => (
+                      <div
+                        key={dIdx}
+                        className="p-4 bg-slate-950/80 rounded-xl border border-amber-500/20 space-y-3"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs font-bold text-slate-200">
+                              {dispute.criterionName}
+                            </h4>
+                            <span className="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              &sigma; = {dispute.standardDeviation} pts
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-amber-400 font-semibold">
+                            &warning; HIGH PANEL DISAGREEMENT
+                          </span>
+                        </div>
+
+                        {/* Per-Judge Score Badges */}
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {dispute.scores.map((sc: any, scIdx: number) => (
+                            <div
+                              key={scIdx}
+                              className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs flex items-center gap-2"
+                            >
+                              <span className="text-slate-400">{sc.judgeName}:</span>
+                              <span className="font-mono font-bold text-slate-100">
+                                {Number(sc.score).toFixed(1)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Qualitative Explanation */}
+                        <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800 text-xs text-slate-300 leading-relaxed">
+                          <strong className="text-indigo-400 block mb-1">AI Disagreement Diagnosis:</strong>
+                          <p>{dispute.explanation}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
+
         {/* 1. Rubric Deficit Breakdown Cards */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">

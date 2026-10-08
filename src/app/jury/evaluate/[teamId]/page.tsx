@@ -256,15 +256,31 @@ export default function JuryEvaluateTeamPage({
             <Award className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-              Evaluating: {team.displayName}
-              {event?.blindMode && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 font-semibold border border-purple-500/30 flex items-center gap-1">
-                  <Shield className="w-3 h-3" /> Blind Mode Active
-                </span>
-              )}
-            </h1>
-            <p className="text-[11px] text-slate-400">{event?.title}</p>
+            {(() => {
+              const isBlind = event?.blindMode ?? true
+              const isSealed = team.isCompleted || !!success
+              const maskedCode = `PROJECT #${(team.teamCode || team.teamId || teamId).slice(0, 6).toUpperCase()}`
+              const visibleTitle = isBlind && !isSealed ? maskedCode : team.displayName
+
+              return (
+                <>
+                  <h1 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                    Evaluating: {visibleTitle}
+                    {isBlind && !isSealed && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 font-semibold border border-purple-500/30 flex items-center gap-1">
+                        <Shield className="w-3 h-3" /> Blind Masked
+                      </span>
+                    )}
+                    {isSealed && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/30 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> Sealed on Ledger
+                      </span>
+                    )}
+                  </h1>
+                  <p className="text-[11px] text-slate-400">{event?.title}</p>
+                </>
+              )
+            })()}
           </div>
         </div>
 
@@ -281,6 +297,51 @@ export default function JuryEvaluateTeamPage({
       </header>
 
       <main className="flex-1 max-w-4xl w-full mx-auto px-6 py-8">
+        {/* DOUBLE-BLIND ACTIVE BANNER */}
+        {(event?.blindMode ?? true) && !team.isCompleted && !success && (
+          <div className="mb-6 p-4 rounded-xl bg-purple-950/30 border border-purple-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center justify-center shrink-0">
+                <Shield className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-purple-200">Strict Double-Blind Judging Active</h3>
+                <p className="text-[11px] text-purple-300/80">
+                  Team identity, college affiliation, and participant profiles are cryptographically masked until your marks are committed.
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-mono font-bold px-2.5 py-1 rounded bg-purple-900/60 text-purple-200 border border-purple-700/50 shrink-0 self-start sm:self-auto">
+              PROJECT #{(team.teamCode || team.teamId || teamId).slice(0, 6).toUpperCase()}
+            </span>
+          </div>
+        )}
+
+        {/* SEALED POST-COMMIT IMMUTABLE BANNER */}
+        {(team.isCompleted || success) && (
+          <div className="mb-6 p-4 rounded-xl bg-emerald-950/40 border border-emerald-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-emerald-200">Evaluation Recorded &amp; Sealed</h3>
+                <div className="text-[11px] text-emerald-300/80 flex items-center gap-2 mt-0.5">
+                  <span>Identity Unmasked: <strong>{team.displayName}</strong></span>
+                  <span>&bull;</span>
+                  <span>Ledger Status: <strong className="font-mono text-emerald-400">IMMUTABLE</strong></span>
+                </div>
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <span className="text-[10px] text-slate-400 uppercase font-mono block">Evaluation ID</span>
+              <span className="text-xs font-mono font-bold text-emerald-400">
+                FP-EV-{(team.teamId || teamId).slice(0, 5).toUpperCase()}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Alerts */}
         {error && (
           <div className="mb-6 p-4 rounded-xl bg-red-950/40 border border-red-800/60 flex items-start gap-3 text-xs text-red-300">
@@ -304,7 +365,12 @@ export default function JuryEvaluateTeamPage({
                 Submission Information
               </span>
               <h2 className="text-xl font-bold text-slate-100 mt-0.5">
-                {team.submission?.title || `${team.displayName} Project`}
+                {(() => {
+                  const isBlind = event?.blindMode ?? true
+                  const isSealed = team.isCompleted || !!success
+                  const maskedCode = `PROJECT #${(team.teamCode || team.teamId || teamId).slice(0, 6).toUpperCase()}`
+                  return team.submission?.title || (isBlind && !isSealed ? `${maskedCode} Submission` : `${team.displayName} Project`)
+                })()}
               </h2>
             </div>
 

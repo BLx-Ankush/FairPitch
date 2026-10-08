@@ -114,6 +114,7 @@ export async function POST(
               weightedPointGaps: analysis.weightedPointGaps,
               teamCriterionAverages: analysis.teamCriterionAverages,
               winnerCriterionAverages: analysis.winnerCriterionAverages,
+              judgeConsensus: analysis.judgeConsensus,
             },
             issues: genResult.issues,
             fixes: genResult.fixes,

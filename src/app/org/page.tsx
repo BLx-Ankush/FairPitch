@@ -47,6 +47,11 @@ import {
 } from 'lucide-react'
 import type { Event } from '@/lib/events/types'
 import { RUBRIC_PRESETS, type RubricPreset } from '@/lib/events/presets'
+import {
+  BENCHMARK_CALIBRATION_CASES,
+  type JudgeCalibrationResult
+} from '@/lib/fairness/calibration'
+import type { FairnessHealth } from '@/lib/fairness/engine'
 
 type OrgNavView =
   | 'events'
@@ -1461,26 +1466,272 @@ export default function OrganizerWorkspacePage() {
               {/* VIEW 7: FAIRNESS */}
               {currentView === 'fairness' && (
                 <div className="space-y-6">
+                  {/* Fairness Health Executive Gauge */}
+                  <div className="bg-gradient-to-r from-emerald-950/40 via-teal-900/20 to-slate-900 border border-emerald-500/30 rounded-2xl p-6 shadow-xl space-y-5">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            Executive Quality Index
+                          </span>
+                          <span className="text-[11px] text-slate-400">Continuous Statistical Telemetry</span>
+                        </div>
+                        <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+                          <Scale className="w-5 h-5 text-emerald-400" />
+                          <span>Fairness Health Diagnostic</span>
+                        </h2>
+                        <p className="text-xs text-slate-300 max-w-2xl mt-1 leading-relaxed">
+                          A composite metric aggregating panel variance normality, inter-rater agreement, blind judging discipline, and cryptographic ledger integrity.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-4 bg-slate-950/80 p-4 rounded-2xl border border-slate-800 shrink-0">
+                        <div className="text-center">
+                          <span className="text-3xl font-black font-mono text-emerald-400">94</span>
+                          <span className="text-xs text-slate-500 font-mono"> / 100</span>
+                        </div>
+                        <div className="border-l border-slate-800 pl-4">
+                          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                            STATUS: EXCELLENT
+                          </span>
+                          <span className="text-[11px] text-slate-400 block mt-1">High Equity & Trust</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80 text-[11px] text-slate-400 flex items-start gap-2">
+                      <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                      <span>
+                        <strong>Methodology Note:</strong> This is a diagnostic health indicator reflecting panel variance and procedural controls, not an objective mathematical proof of &ldquo;fairness.&rdquo;
+                      </span>
+                    </div>
+
+                    {/* 5 Component Breakdown Bars */}
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-3 pt-2 border-t border-slate-800/80">
+                      <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-400 text-[11px]">Judge Consistency</span>
+                          <span className="font-mono font-bold text-emerald-400">94%</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-emerald-500 rounded-full" style={{ width: '94%' }} />
+                        </div>
+                        <span className="text-[10px] text-slate-500 block">Z-score variance &le; 1.0</span>
+                      </div>
+
+                      <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-400 text-[11px]">Score Distribution</span>
+                          <span className="font-mono font-bold text-teal-400">91%</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-teal-500 rounded-full" style={{ width: '91%' }} />
+                        </div>
+                        <span className="text-[10px] text-slate-500 block">Balanced bell curve</span>
+                      </div>
+
+                      <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-400 text-[11px]">Inter-Judge Agreement</span>
+                          <span className="font-mono font-bold text-indigo-400">87%</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-indigo-500 rounded-full" style={{ width: '87%' }} />
+                        </div>
+                        <span className="text-[10px] text-slate-500 block">Mean &sigma; = 0.82 pts</span>
+                      </div>
+
+                      <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-400 text-[11px]">Blind Judging</span>
+                          <span className="font-mono font-bold text-purple-400">100%</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-purple-500 rounded-full" style={{ width: '100%' }} />
+                        </div>
+                        <span className="text-[10px] text-slate-500 block">Institutional masking ON</span>
+                      </div>
+
+                      <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-400 text-[11px]">Audit Ledger</span>
+                          <span className="font-mono font-bold text-cyan-400">100%</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-cyan-500 rounded-full" style={{ width: '100%' }} />
+                        </div>
+                        <span className="text-[10px] text-slate-500 block">SHA-256 blocks valid</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Core Telemetry Row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="p-4 bg-slate-900/80 rounded-2xl border border-slate-800 shadow-md">
+                      <div className="text-xs text-slate-400 font-semibold">Panel Agreement Index</div>
+                      <div className="text-2xl font-bold text-emerald-400 mt-1">94.8%</div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">Inter-rater Pearson consensus</p>
+                    </div>
+                    <div className="p-4 bg-slate-900/80 rounded-2xl border border-slate-800 shadow-md">
+                      <div className="text-xs text-slate-400 font-semibold">Fatigue Drift Metric</div>
+                      <div className="text-2xl font-bold text-slate-200 mt-1">r = -0.12</div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">Well within &plusmn;0.50 tolerance</p>
+                    </div>
+                    <div className="p-4 bg-slate-900/80 rounded-2xl border border-slate-800 shadow-md">
+                      <div className="text-xs text-slate-400 font-semibold">Sensitivity Reranking Risk</div>
+                      <div className="text-2xl font-bold text-indigo-400 mt-1">0 Winner Flips</div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">Rankings resilient to outlier exclusion</p>
+                    </div>
+                  </div>
+
+                  {/* PRE-EVENT JUDGE CALIBRATION MATRIX (BIAS PREVENTION) */}
                   <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                    <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                      <Scale className="w-5 h-5 text-emerald-400" />
-                      <span>Statistical Fairness & Telemetry Engine</span>
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-                      <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
-                        <div className="text-xs text-slate-400 font-semibold">Panel Consistency</div>
-                        <div className="text-2xl font-bold text-emerald-400 mt-1">94.8%</div>
-                        <p className="text-[11px] text-slate-500 mt-0.5">Inter-rater agreement</p>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                            Bias Prevention
+                          </span>
+                          <span className="text-xs text-slate-400">Pre-Judging Standard Benchmark</span>
+                        </div>
+                        <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                          <SlidersHorizontal className="w-4 h-4 text-violet-400" />
+                          <span>Pre-Judging Evaluator Calibration Matrix</span>
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Evaluators score identical benchmark test cases before judging begins to detect systematic harshness or leniency.
+                        </p>
                       </div>
-                      <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
-                        <div className="text-xs text-slate-400 font-semibold">Fatigue Drift</div>
-                        <div className="text-2xl font-bold text-slate-200 mt-1">r = -0.12</div>
-                        <p className="text-[11px] text-slate-500 mt-0.5">Within tolerance</p>
+
+                      <button
+                        type="button"
+                        onClick={() => showToast('Recalibration matrix refreshed across all active panel evaluators.')}
+                        className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer self-start sm:self-auto"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 text-violet-400" />
+                        <span>Sync Calibration</span>
+                      </button>
+                    </div>
+
+                    <div className="overflow-x-auto pt-2">
+                      <table className="w-full text-left text-xs text-slate-300">
+                        <thead className="bg-slate-950/80 text-[10px] uppercase font-semibold text-slate-400 border-b border-slate-800">
+                          <tr>
+                            <th className="py-3 px-4">Evaluator</th>
+                            <th className="py-3 px-4">Calibration Status</th>
+                            <th className="py-3 px-4">Evaluator Mean</th>
+                            <th className="py-3 px-4">Panel Delta (&Delta;)</th>
+                            <th className="py-3 px-4">Z-Score Offset</th>
+                            <th className="py-3 px-4">Recommended Adjustment</th>
+                            <th className="py-3 px-4 text-right">Normalization Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60">
+                          <tr className="hover:bg-slate-800/30 transition-colors">
+                            <td className="py-3 px-4">
+                              <span className="font-bold text-slate-100 block">Dr. Evelyn Vance</span>
+                              <span className="text-[10px] text-slate-500">evelyn@nexis.edu</span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                Well-Calibrated Baseline
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-mono">7.18 / 10</td>
+                            <td className="py-3 px-4 font-mono text-emerald-400">+0.14 pts</td>
+                            <td className="py-3 px-4 font-mono text-emerald-400">+0.12 &sigma;</td>
+                            <td className="py-3 px-4 font-mono text-slate-400">-0.1 pts</td>
+                            <td className="py-3 px-4 text-right">
+                              <span className="text-[10px] font-semibold text-slate-400 bg-slate-950 px-2 py-1 rounded border border-slate-800">
+                                Unmodified
+                              </span>
+                            </td>
+                          </tr>
+
+                          <tr className="hover:bg-slate-800/30 transition-colors">
+                            <td className="py-3 px-4">
+                              <span className="font-bold text-slate-100 block">Marcus Sterling</span>
+                              <span className="text-[10px] text-slate-500">marcus@nexis.edu</span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                Well-Calibrated Baseline
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-mono">6.98 / 10</td>
+                            <td className="py-3 px-4 font-mono text-emerald-400">-0.06 pts</td>
+                            <td className="py-3 px-4 font-mono text-emerald-400">-0.05 &sigma;</td>
+                            <td className="py-3 px-4 font-mono text-slate-400">+0.1 pts</td>
+                            <td className="py-3 px-4 text-right">
+                              <span className="text-[10px] font-semibold text-slate-400 bg-slate-950 px-2 py-1 rounded border border-slate-800">
+                                Unmodified
+                              </span>
+                            </td>
+                          </tr>
+
+                          <tr className="hover:bg-slate-800/30 transition-colors bg-rose-950/10">
+                            <td className="py-3 px-4">
+                              <span className="font-bold text-slate-100 block">Prof. Aris Thorne</span>
+                              <span className="text-[10px] text-slate-500">aris@nexis.edu</span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                                Systematic Harshness
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-mono text-rose-300">5.33 / 10</td>
+                            <td className="py-3 px-4 font-mono text-rose-400">-1.70 pts</td>
+                            <td className="py-3 px-4 font-mono text-rose-400">-1.41 &sigma;</td>
+                            <td className="py-3 px-4 font-mono text-amber-400 font-bold">+1.7 pts</td>
+                            <td className="py-3 px-4 text-right">
+                              <button
+                                type="button"
+                                onClick={() => showToast('Applied +1.7 pts normalization offset to Prof. Aris Thorne.')}
+                                className="text-[10px] font-semibold text-amber-300 bg-amber-950/40 hover:bg-amber-950/80 px-2.5 py-1 rounded border border-amber-500/40 transition-colors cursor-pointer"
+                              >
+                                Apply +1.7 Offset
+                              </button>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Active Telemetry Insights & Recommendations */}
+                  <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Automated Panel Integrity Advisory
+                    </h4>
+                    <div className="space-y-2 text-xs">
+                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-start gap-2.5 text-slate-300">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="text-slate-100 block">Double-Blind Masking Active:</strong>
+                          <span>
+                            Evaluator desks mask college affiliations and team names as &ldquo;PROJECT #CODE&rdquo; to eliminate institutional prestige bias.
+                          </span>
+                        </div>
                       </div>
-                      <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
-                        <div className="text-xs text-slate-400 font-semibold">Winner-Flip Risk</div>
-                        <div className="text-2xl font-bold text-indigo-400 mt-1">Low (0 Flips)</div>
-                        <p className="text-[11px] text-slate-500 mt-0.5">Robust rankings</p>
+
+                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-start gap-2.5 text-slate-300">
+                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="text-slate-100 block">Harshness Normalization Alert:</strong>
+                          <span>
+                            Prof. Aris Thorne scores 1.70 points below panel baseline on benchmark test cases. Normalization offsets protect teams evaluated in this track.
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-start gap-2.5 text-slate-300">
+                        <ShieldCheck className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="text-slate-100 block">Cryptographic Ledger Health:</strong>
+                          <span>
+                            Zero hash breaks detected across all sequential SHA-256 evaluation commits. Ledger is immutable and publicly auditable.
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>

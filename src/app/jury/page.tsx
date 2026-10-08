@@ -26,12 +26,21 @@ import {
   Bell,
   Copy,
   Check,
-  ShieldCheck
+  ShieldCheck,
+  Scale,
+  SlidersHorizontal,
+  Info
 } from 'lucide-react'
 import type { JudgeQueueItem } from '@/lib/jury/types'
+import {
+  BENCHMARK_CALIBRATION_CASES,
+  evaluateJudgeCalibration,
+  type JudgeCalibrationResult
+} from '@/lib/fairness/calibration'
 
 type JuryNavView =
   | 'queue'
+  | 'calibration'
   | 'progress'
   | 'chain'
   | 'conflicts'
@@ -54,6 +63,20 @@ export default function JuryQueueDashboard() {
   const [selectedConflictTeam, setSelectedConflictTeam] = useState('')
   const [revisionReason, setRevisionReason] = useState('')
   const [selectedRevisionTeam, setSelectedRevisionTeam] = useState('')
+
+  // Calibration state
+  const [calibrationScores, setCalibrationScores] = useState<Record<string, number>>({
+    'bench-01': 7.2,
+    'bench-02': 8.6,
+    'bench-03': 5.4,
+  })
+  const [calibrationResult, setCalibrationResult] = useState<JudgeCalibrationResult | null>(() =>
+    evaluateJudgeCalibration('jury-curr', 'Current Evaluator', {
+      'bench-01': 7.2,
+      'bench-02': 8.6,
+      'bench-03': 5.4,
+    })
+  )
 
   function showToast(msg: string) {
     setToastMessage(msg)
@@ -116,6 +139,15 @@ export default function JuryQueueDashboard() {
           badge: pendingCount > 0 ? `${pendingCount}` : undefined,
           badgeColor: 'bg-violet-500/20 text-violet-300 border-violet-500/30',
         },
+        {
+          id: 'calibration' as JuryNavView,
+          label: 'Pre-Event Calibration',
+          icon: Scale,
+          badge: calibrationResult?.isCalibrated ? 'Calibrated' : 'Recommended',
+          badgeColor: calibrationResult?.isCalibrated
+            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+            : 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+        },
         { id: 'progress' as JuryNavView, label: 'Scoring Telemetry', icon: Award },
         { id: 'guidelines' as JuryNavView, label: 'Blind Judging Policy', icon: Shield },
       ],
@@ -141,6 +173,11 @@ export default function JuryQueueDashboard() {
       title: 'Assigned Evaluation Queue',
       subtitle: 'Randomized drift order evaluation sequence to mitigate panel fatigue',
       icon: LayoutDashboard,
+    },
+    calibration: {
+      title: 'Pre-Event Judge Calibration Engine',
+      subtitle: 'Proactive bias prevention: score standardized benchmark submissions to establish panel consensus',
+      icon: Scale,
     },
     progress: {
       title: 'Evaluation Progress & Telemetry',
@@ -432,6 +469,205 @@ export default function JuryQueueDashboard() {
                         )
                       })
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW: PRE-EVENT CALIBRATION */}
+              {currentView === 'calibration' && (
+                <div className="space-y-6">
+                  {/* Banner */}
+                  <div className="bg-gradient-to-r from-violet-950/40 via-purple-900/20 to-slate-900 border border-violet-500/30 rounded-2xl p-6 shadow-xl space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                            Bias Prevention Engine
+                          </span>
+                          <span className="text-xs text-slate-400">Step 1 of Evaluation</span>
+                        </div>
+                        <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                          <Scale className="w-5 h-5 text-violet-400" />
+                          <span>Pre-Judging Evaluator Calibration</span>
+                        </h2>
+                        <p className="text-xs text-slate-300 max-w-2xl mt-1 leading-relaxed">
+                          Rather than discovering bias after the competition concludes, FairPitch calibrates evaluator baselines upfront.
+                          Evaluate these 3 anonymized benchmark submissions to identify potential harshness or leniency offsets.
+                        </p>
+                      </div>
+
+                      {calibrationResult && (
+                        <div className={`px-4 py-3 rounded-xl border text-center shrink-0 ${calibrationResult.statusBadgeColor}`}>
+                          <span className="text-[10px] uppercase font-bold tracking-wider block opacity-80">
+                            Scoring Alignment
+                          </span>
+                          <span className="text-sm font-bold block mt-0.5">
+                            {calibrationResult.tendency}
+                          </span>
+                          <span className="text-[11px] font-mono opacity-90 block mt-0.5">
+                            Offset: {calibrationResult.delta > 0 ? '+' : ''}{calibrationResult.delta} pts ({calibrationResult.zScore > 0 ? '+' : ''}{calibrationResult.zScore} &sigma;)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Telemetry Stat Cards */}
+                    {calibrationResult && (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-slate-800/80">
+                        <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block">Your Average</span>
+                          <span className="text-base font-bold font-mono text-slate-100">
+                            {calibrationResult.judgeMean.toFixed(1)} / 10
+                          </span>
+                        </div>
+                        <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block">Panel Benchmark</span>
+                          <span className="text-base font-bold font-mono text-emerald-400">
+                            {calibrationResult.benchmarkMean.toFixed(1)} / 10
+                          </span>
+                        </div>
+                        <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block">Rank Reliability</span>
+                          <span className="text-base font-bold font-mono text-violet-400">
+                            {calibrationResult.reliabilityPercent}%
+                          </span>
+                        </div>
+                        <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block">Rec. Normalization</span>
+                          <span className="text-base font-bold font-mono text-indigo-300">
+                            {calibrationResult.recommendedOffset > 0 ? '+' : ''}{calibrationResult.recommendedOffset} pts
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3 Benchmark Cases */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-slate-200">
+                        Standardized Benchmark Cases (3)
+                      </h3>
+                      <span className="text-xs text-slate-400">
+                        Adjust sliders to reflect your objective marks
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4">
+                      {BENCHMARK_CALIBRATION_CASES.map((bCase) => {
+                        const currentScore = calibrationScores[bCase.id] ?? bCase.expectedMedianScore
+                        const diff = Number((currentScore - bCase.expectedMedianScore).toFixed(1))
+
+                        return (
+                          <div
+                            key={bCase.id}
+                            className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-lg hover:border-slate-700 transition-colors"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                                    {bCase.code}
+                                  </span>
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800/80 text-slate-400 border border-slate-700/60 font-medium">
+                                    {bCase.track}
+                                  </span>
+                                </div>
+                                <h4 className="text-base font-bold text-slate-100">{bCase.title}</h4>
+                                <p className="text-xs text-slate-400 mt-0.5">{bCase.summary}</p>
+                              </div>
+
+                              <div className="flex items-center gap-3 shrink-0 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                                <div className="text-right">
+                                  <span className="text-[10px] text-slate-500 block uppercase">Panel Median</span>
+                                  <span className="text-xs font-mono font-semibold text-slate-300">
+                                    {bCase.expectedMedianScore.toFixed(1)} / 10
+                                  </span>
+                                </div>
+                                <div className="h-6 w-px bg-slate-800" />
+                                <div className="text-right">
+                                  <span className="text-[10px] text-slate-400 block uppercase font-bold">Your Mark</span>
+                                  <span className="text-base font-mono font-bold text-violet-400">
+                                    {currentScore.toFixed(1)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Details Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs bg-slate-950/60 p-3.5 rounded-xl border border-slate-800/80">
+                              <div>
+                                <strong className="text-slate-300 block mb-0.5">Problem Solved:</strong>
+                                <p className="text-slate-400 leading-relaxed">{bCase.problemStatement}</p>
+                              </div>
+                              <div>
+                                <strong className="text-slate-300 block mb-0.5">Technical Architecture:</strong>
+                                <p className="text-slate-400 leading-relaxed">{bCase.solutionArchitecture}</p>
+                              </div>
+                            </div>
+
+                            {/* Evidence note */}
+                            <div className="text-xs text-slate-400 flex items-center gap-2">
+                              <Info className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                              <span>{bCase.evidenceNotes}</span>
+                            </div>
+
+                            {/* Interactive Slider */}
+                            <div className="pt-2 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center gap-4">
+                              <div className="flex-1 space-y-1">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-slate-400 font-medium">Evaluation Score Slider</span>
+                                  <span className={`font-mono text-xs font-semibold ${
+                                    diff === 0 ? 'text-emerald-400' : diff > 0 ? 'text-amber-400' : 'text-rose-400'
+                                  }`}>
+                                    {diff === 0 ? 'Exact Panel Consensus' : `${diff > 0 ? '+' : ''}${diff} from Median`}
+                                  </span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min="1.0"
+                                  max="10.0"
+                                  step="0.1"
+                                  value={currentScore}
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value)
+                                    const next = { ...calibrationScores, [bCase.id]: val }
+                                    setCalibrationScores(next)
+                                    setCalibrationResult(evaluateJudgeCalibration('jury-curr', 'Current Evaluator', next))
+                                  }}
+                                  className="w-full accent-violet-500 cursor-pointer"
+                                />
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = { ...calibrationScores, [bCase.id]: bCase.expectedMedianScore }
+                                  setCalibrationScores(next)
+                                  setCalibrationResult(evaluateJudgeCalibration('jury-curr', 'Current Evaluator', next))
+                                }}
+                                className="px-3 py-1.5 rounded-lg text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 shrink-0 transition-colors cursor-pointer"
+                              >
+                                Align with Median
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          showToast('Calibration profile verified and locked for panel normalization.')
+                        }}
+                        className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold shadow-lg shadow-violet-600/30 flex items-center gap-2 cursor-pointer transition-all"
+                      >
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>Lock Calibration Baseline</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

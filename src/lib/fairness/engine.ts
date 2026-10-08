@@ -576,3 +576,136 @@ export function computeFairnessTelemetry(
     flaggedJudgeCount: flaggedJudgeIds.length,
   }
 }
+
+export interface FairnessHealth {
+  overallScore: number // 0 - 100
+  grade: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'AT RISK'
+  statusColor: string
+  badgeBg: string
+  components: {
+    judgeConsistency: number // 0 - 100
+    distributionNormality: number // 0 - 100
+    interJudgeAgreement: number // 0 - 100
+    blindJudgingIntegrity: number // 0 - 100
+    auditLedgerIntegrity: number // 0 - 100
+  }
+  recommendations: string[]
+}
+
+/**
+ * Derives an executive 0-100 Fairness Health Index summarizing statistical equity,
+ * inter-judge consensus, blind integrity, and cryptographic ledger validity.
+ */
+export function calculateFairnessHealth(
+  telemetry: FairnessTelemetrySnapshot,
+  options?: {
+    isBlindMode?: boolean
+    isAuditValid?: boolean
+  }
+): FairnessHealth {
+  const isBlind = options?.isBlindMode ?? true
+  const isAudit = options?.isAuditValid ?? true
+
+  // 1. Judge Consistency (0 - 100)
+  let consistencyScore = 100
+  for (const j of telemetry.leniency) {
+    const absZ = Math.abs(j.zScore)
+    if (absZ > 1.5) {
+      consistencyScore -= 12 * (absZ - 1.5)
+    } else if (absZ > 1.0) {
+      consistencyScore -= 4 * (absZ - 1.0)
+    }
+  }
+  const judgeConsistency = Math.max(40, Math.min(100, Math.round(consistencyScore)))
+
+  // 2. Inter-Judge Agreement (0 - 100)
+  let agreementScore = 100
+  if (telemetry.agreement.length > 0) {
+    const avgSigma =
+      telemetry.agreement.reduce((sum, a) => sum + a.standardDeviation, 0) /
+      telemetry.agreement.length
+    agreementScore = Math.max(45, Math.min(100, Math.round(100 - avgSigma * 12)))
+    if (telemetry.highDisagreementCount > 0) {
+      agreementScore = Math.max(40, agreementScore - telemetry.highDisagreementCount * 6)
+    }
+  }
+  const interJudgeAgreement = agreementScore
+
+  // 3. Distribution Normality (0 - 100)
+  let distributionScore = 92
+  if (telemetry.panelStdDev < 5.0) {
+    distributionScore -= 15
+  } else if (telemetry.panelStdDev > 25.0) {
+    distributionScore -= 10
+  }
+  const distributionNormality = Math.max(50, Math.min(100, distributionScore))
+
+  // 4. Blind Judging Integrity (100 if blind mode active)
+  const blindJudgingIntegrity = isBlind ? 100 : 70
+
+  // 5. Cryptographic Ledger Integrity (100 if verified, 0 if broken)
+  const auditLedgerIntegrity = isAudit ? 100 : 0
+
+  // Composite Weighted Score
+  const overall = Math.round(
+    judgeConsistency * 0.25 +
+    interJudgeAgreement * 0.25 +
+    distributionNormality * 0.20 +
+    blindJudgingIntegrity * 0.15 +
+    auditLedgerIntegrity * 0.15
+  )
+
+  let grade: FairnessHealth['grade'] = 'EXCELLENT'
+  let statusColor = 'text-emerald-400'
+  let badgeBg = 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+
+  if (overall < 70 || !isAudit) {
+    grade = 'AT RISK'
+    statusColor = 'text-red-400'
+    badgeBg = 'bg-red-500/15 border-red-500/30 text-red-400'
+  } else if (overall < 80) {
+    grade = 'FAIR'
+    statusColor = 'text-amber-400'
+    badgeBg = 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+  } else if (overall < 90) {
+    grade = 'GOOD'
+    statusColor = 'text-teal-400'
+    badgeBg = 'bg-teal-500/15 border-teal-500/30 text-teal-400'
+  }
+
+  const recommendations: string[] = []
+  if (telemetry.flaggedJudgeCount > 0) {
+    recommendations.push(
+      `${telemetry.flaggedJudgeCount} judge(s) exhibit leniency deviation (|z| > 1.5). Apply peer calibration normalization.`
+    )
+  }
+  if (telemetry.highDisagreementCount > 0) {
+    recommendations.push(
+      `${telemetry.highDisagreementCount} team(s) have divergent judge scores. Review qualitative dispute notes.`
+    )
+  }
+  if (!isBlind) {
+    recommendations.push(
+      'Activate double-blind judging mode to eliminate prestige and institutional bias.'
+    )
+  }
+  if (recommendations.length === 0) {
+    recommendations.push('Panel scoring is highly calibrated with verified cryptographic integrity.')
+  }
+
+  return {
+    overallScore: overall,
+    grade,
+    statusColor,
+    badgeBg,
+    components: {
+      judgeConsistency,
+      distributionNormality,
+      interJudgeAgreement,
+      blindJudgingIntegrity,
+      auditLedgerIntegrity,
+    },
+    recommendations,
+  }
+}
+
