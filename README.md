@@ -147,25 +147,45 @@ Copy `.env.example` to `.env.local` and configure your credentials:
 cp .env.example .env.local
 ```
 
-Key environment variables:
+The configuration contract is split cleanly between production deployments and local testing:
+
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+# Production Supabase Infrastructure (Required for live deployment)
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-SESSION_SECRET=your_32_character_session_signing_secret
+
+# Google Gemini AI Loss Autopsy
 GEMINI_API_KEY=your_google_gemini_api_key
 GEMINI_MODEL=gemini-2.5-flash
+
+# Canonical URL
+NEXT_PUBLIC_APP_URL=https://fairpitch.app
+
+# Production Security Mode (Disable demo mode in production!)
+NEXT_PUBLIC_DEMO_MODE=false
+DEMO_COOKIE_SECRET=your_32_character_hmac_secret_for_local_signing
 ```
 
 *(Note: If `GEMINI_API_KEY` is omitted, FairPitch automatically activates its deterministic mathematical fallback autopsy generator).*
 
-### 3. Run Locally
+### 3. Database Migrations & Automated Test Harness
+FairPitch includes 6 production PostgreSQL migrations in `supabase/migrations/` and an automated offline test harness using PGlite and `pgcrypto`. You can verify all 24 tables, RLS policies, append-only triggers, and the 100-judge concurrent load test locally:
+
+```bash
+# Run complete database harness & pgTAP security tests
+node scripts/run-all-tests.js
+```
+
+For complete database schema specifications, Row-Level Security rules, and production deployment instructions, see [docs/DATABASE_AND_DEPLOYMENT.md](./docs/DATABASE_AND_DEPLOYMENT.md).
+
+### 4. Run Locally
 ```bash
 npm run dev
 ```
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### 4. Production Build & Verification
+### 5. Production Build & Verification
 ```bash
 npm run build
 npm start

@@ -33,14 +33,15 @@ async function main() {
     `);
     console.log('✓ Auth schema and auth.uid() helper initialized.\n');
 
-    // 1. Execute all 5 migrations in order
+    // 1. Execute all 6 migrations in order
     console.log('[Phase 2] Applying Database Migrations (supabase/migrations/)...');
     const migrationFiles = [
         '20261001000001_tables_and_indexes.sql',
         '20261001000002_helper_functions.sql',
         '20261001000003_audit_chain_and_triggers.sql',
         '20261001000004_rls_policies.sql',
-        '20261001000005_progress_view_and_jobs.sql'
+        '20261001000005_progress_view_and_jobs.sql',
+        '20261001000006_upi_dynamic_qr_and_registrations.sql'
     ];
 
     for (const file of migrationFiles) {
