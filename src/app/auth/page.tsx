@@ -310,7 +310,7 @@ function AuthForm() {
         options: {
           redirectTo: `${window.location.origin}/api/auth/callback?redirectTo=${encodeURIComponent(
             redirectTo || roleConfig.defaultDest
-          )}`,
+          )}&accountType=${encodeURIComponent(currentRole)}`,
         },
       })
       if (authErr) throw authErr
@@ -648,8 +648,8 @@ function AuthForm() {
               {/* SIGN IN VIEW */}
               {activeTab === 'signin' && (
                 <div className="space-y-5">
-                  {/* Google OAuth for participants */}
-                  {currentRole === 'participant' && (
+                  {/* Google OAuth for public roles */}
+                  {currentRole !== 'admin' && (
                     <>
                       <button
                         type="button"
