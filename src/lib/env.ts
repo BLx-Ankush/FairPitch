@@ -33,8 +33,7 @@ export interface EnvConfig {
  */
 export function getEnvConfig(): EnvConfig {
   const isProduction = process.env.NODE_ENV === 'production'
-  const isDemoAllowed =
-    process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !isProduction
+  const isDemoAllowed = false
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''

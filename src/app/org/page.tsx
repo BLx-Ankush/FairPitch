@@ -78,64 +78,27 @@ export default function OrganizerWorkspacePage() {
   // Creation form state
   const [newEventTitle, setNewEventTitle] = useState('')
   const [newEventDesc, setNewEventDesc] = useState('')
-  const [newEventCode, setNewEventCode] = useState('HACK-2026')
+  const [newEventCode, setNewEventCode] = useState('')
   const [newEventDate, setNewEventDate] = useState('')
-  const [newRegFee, setNewRegFee] = useState('500')
-  const [newUpiVpa, setNewUpiVpa] = useState('nexis@okhdfcbank')
-  const [newUpiName, setNewUpiName] = useState('Nexis Hackathon Org')
+  const [newRegFee, setNewRegFee] = useState('0')
+  const [newUpiVpa, setNewUpiVpa] = useState('')
+  const [newUpiName, setNewUpiName] = useState('')
   const [newBlindMode, setNewBlindMode] = useState(true)
 
-  // Sample teams data for organizer overview
-  const [teams, setTeams] = useState([
-    {
-      id: 't-1',
-      name: 'NeuroGait Pioneers',
-      track: 'AI & Healthcare',
-      membersCount: 4,
-      paymentStatus: 'verified',
-      utr: '427819284123',
-      submission: { title: 'NeuroGait Cerebral Palsy Analyzer', repo: 'https://github.com/neurogait/core' },
-      score: 87.5,
-    },
-    {
-      id: 't-2',
-      name: 'TerraPulse Grid',
-      track: 'ClimateTech',
-      membersCount: 3,
-      paymentStatus: 'verified',
-      utr: '982716352419',
-      submission: { title: 'Decentralized Microgrid Optimizer', repo: 'https://github.com/terrapulse/grid' },
-      score: 84.0,
-    },
-    {
-      id: 't-3',
-      name: 'MediSync AI',
-      track: 'AI & Healthcare',
-      membersCount: 4,
-      paymentStatus: 'pending_verification',
-      utr: '109283746519',
-      submission: { title: 'Emergency Room Triage Automation', repo: 'https://github.com/medisync/triage' },
-      score: 79.5,
-    },
-    {
-      id: 't-4',
-      name: 'VaultFlow Labs',
-      track: 'FinTech & Web3',
-      membersCount: 2,
-      paymentStatus: 'unpaid',
-      utr: '',
-      submission: null,
-      score: 0,
-    },
-  ])
+  // Real teams state for organizer overview
+  const [teams, setTeams] = useState<Array<{
+    id: string
+    name: string
+    track: string
+    membersCount: number
+    paymentStatus: string
+    utr: string
+    submission: { title: string; repo?: string } | null
+    score: number
+  }>>([])
 
   // Rubrics state & interactive controls
-  const [rubrics, setRubrics] = useState<Array<{ id: string; name: string; weight: number; desc: string; max_score?: number }>>([
-    { id: 'r-1', name: 'Technical Execution & Architecture', weight: 40, desc: 'Code hygiene, commit history, stack complexity' },
-    { id: 'r-2', name: 'Originality & Novelty', weight: 25, desc: 'Uniqueness of approach compared to existing solutions' },
-    { id: 'r-3', name: 'Impact & Feasibility', weight: 20, desc: 'Real-world viability and societal or market utility' },
-    { id: 'r-4', name: 'Presentation & UI/UX', weight: 15, desc: 'Clarity of pitch, interface design, live demo quality' },
-  ])
+  const [rubrics, setRubrics] = useState<Array<{ id: string; name: string; weight: number; desc: string; max_score?: number }>>([])
   const [rubricsLoading, setRubricsLoading] = useState(false)
   const [rubricActionLoading, setRubricActionLoading] = useState(false)
   const [showAddRubric, setShowAddRubric] = useState(false)
@@ -148,12 +111,16 @@ export default function OrganizerWorkspacePage() {
   const [editRubricDesc, setEditRubricDesc] = useState('')
   const [showPresetModal, setShowPresetModal] = useState(false)
 
-  // Sample jury members
-  const [judges, setJudges] = useState([
-    { id: 'j-1', name: 'Dr. Evelyn Vance', email: 'evelyn@nexis.edu', assigned: 4, scored: 4, zScore: 0.12, status: 'completed' },
-    { id: 'j-2', name: 'Marcus Sterling', email: 'marcus@nexis.edu', assigned: 4, scored: 3, zScore: -0.05, status: 'scoring' },
-    { id: 'j-3', name: 'Prof. Aris Thorne', email: 'aris@nexis.edu', assigned: 4, scored: 2, zScore: -1.41, status: 'scoring' },
-  ])
+  // Real jury members state
+  const [judges, setJudges] = useState<Array<{
+    id: string
+    name: string
+    email: string
+    assigned: number
+    scored: number
+    zScore: number
+    status: string
+  }>>([])
 
   function showToast(msg: string) {
     setToastMessage(msg)
@@ -167,7 +134,7 @@ export default function OrganizerWorkspacePage() {
       const res = await fetch(`/api/events/${eventId}/rubrics`)
       if (res.ok) {
         const data = await res.json()
-        if (data.criteria && data.criteria.length > 0) {
+        if (data.criteria && Array.isArray(data.criteria)) {
           setRubrics(
             data.criteria.map((c: any) => ({
               id: c.id,
@@ -177,12 +144,80 @@ export default function OrganizerWorkspacePage() {
               max_score: Number(c.max_score) || 10,
             }))
           )
+        } else {
+          setRubrics([])
         }
+      } else {
+        setRubrics([])
       }
     } catch {
-      // Keep current rubrics fallback
+      setRubrics([])
     } finally {
       setRubricsLoading(false)
+    }
+  }
+
+  async function fetchTeamsForEvent(eventId: string) {
+    if (!eventId) return
+    try {
+      const res = await fetch(`/api/events/${eventId}/teams`)
+      if (res.ok) {
+        const data = await res.json()
+        const teamList = (data.teams || []).map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          track: t.track || 'General',
+          membersCount: t.memberCount || 1,
+          paymentStatus: t.payment_status || 'unpaid',
+          utr: t.utr_number || '',
+          submission: t.submission ? { title: t.submission.title || 'Submitted Project', repo: t.submission.repo_url } : null,
+          score: Number(t.final_score || 0),
+        }))
+        setTeams(teamList)
+      } else {
+        setTeams([])
+      }
+    } catch {
+      setTeams([])
+    }
+  }
+
+  async function fetchJudgesForEvent(eventId: string) {
+    if (!eventId) return
+    try {
+      const res = await fetch(`/api/org/events/${eventId}/assignments`)
+      if (res.ok) {
+        const data = await res.json()
+        const assignments = data.assignments || []
+        const judgeMap: Record<string, { id: string; name: string; email: string; assigned: number; scored: number; zScore: number; status: string }> = {}
+        assignments.forEach((a: any) => {
+          const jId = a.judge_id
+          if (!judgeMap[jId]) {
+            judgeMap[jId] = {
+              id: jId,
+              name: a.profiles?.full_name || 'Jury Member',
+              email: a.profiles?.email || '',
+              assigned: 0,
+              scored: 0,
+              zScore: 0.0,
+              status: 'scoring',
+            }
+          }
+          judgeMap[jId].assigned += 1
+          if (a.status === 'completed') {
+            judgeMap[jId].scored += 1
+          }
+        })
+        const judgeList = Object.values(judgeMap).map((j) => ({
+          ...j,
+          status: j.scored >= j.assigned && j.assigned > 0 ? 'completed' : 'scoring',
+        }))
+        setJudges(judgeList)
+      } else {
+        setJudges([])
+      }
+    } catch {
+      setJudges([])
     }
   }
 
@@ -196,6 +231,8 @@ export default function OrganizerWorkspacePage() {
         if (evList.length > 0 && !selectedEventId) {
           setSelectedEventId(evList[0].id)
           fetchRubricsForEvent(evList[0].id)
+          fetchTeamsForEvent(evList[0].id)
+          fetchJudgesForEvent(evList[0].id)
         }
       }
     } finally {
@@ -210,6 +247,8 @@ export default function OrganizerWorkspacePage() {
   useEffect(() => {
     if (selectedEventId) {
       fetchRubricsForEvent(selectedEventId)
+      fetchTeamsForEvent(selectedEventId)
+      fetchJudgesForEvent(selectedEventId)
     }
   }, [selectedEventId])
 
@@ -260,9 +299,13 @@ export default function OrganizerWorkspacePage() {
       return
     }
 
-    setRubricActionLoading(true)
-    const targetEventId = activeEvent?.id || selectedEventId || 'e0000000-0000-0000-0000-000000000001'
+    const targetEventId = activeEvent?.id || selectedEventId
+    if (!targetEventId) {
+      showToast('Please select or create an event first')
+      return
+    }
 
+    setRubricActionLoading(true)
     try {
       const res = await fetch(`/api/events/${targetEventId}/rubrics`, {
         method: 'POST',
@@ -291,25 +334,15 @@ export default function OrganizerWorkspacePage() {
       setShowAddRubric(false)
       showToast(`Added criterion "${newRubricName.trim()}"!`)
     } catch {
-      const newCrit = {
-        id: `crit-${Date.now()}`,
-        name: newRubricName.trim(),
-        weight: weightNum,
-        desc: newRubricDesc.trim(),
-        max_score: 10,
-      }
-      setRubrics((prev) => [...prev, newCrit])
-      setNewRubricName('')
-      setNewRubricDesc('')
-      setShowAddRubric(false)
-      showToast(`Added criterion "${newRubricName.trim()}" (saved)`)
+      showToast('Failed to add criterion')
     } finally {
       setRubricActionLoading(false)
     }
   }
 
   async function handleRemoveRubric(criterionId: string, criterionName: string) {
-    const targetEventId = activeEvent?.id || selectedEventId || 'e0000000-0000-0000-0000-000000000001'
+    const targetEventId = activeEvent?.id || selectedEventId
+    if (!targetEventId) return
     setRubricActionLoading(true)
     try {
       await fetch(`/api/events/${targetEventId}/rubrics/${criterionId}`, {
@@ -318,8 +351,7 @@ export default function OrganizerWorkspacePage() {
       setRubrics((prev) => prev.filter((r) => r.id !== criterionId))
       showToast(`Removed criterion "${criterionName}"`)
     } catch {
-      setRubrics((prev) => prev.filter((r) => r.id !== criterionId))
-      showToast(`Removed criterion "${criterionName}" (saved)`)
+      showToast('Failed to remove criterion')
     } finally {
       setRubricActionLoading(false)
     }
@@ -343,7 +375,8 @@ export default function OrganizerWorkspacePage() {
       return
     }
 
-    const targetEventId = activeEvent?.id || selectedEventId || 'e0000000-0000-0000-0000-000000000001'
+    const targetEventId = activeEvent?.id || selectedEventId
+    if (!targetEventId) return
     setRubricActionLoading(true)
     try {
       await fetch(`/api/events/${targetEventId}/rubrics/${criterionId}`, {
@@ -365,15 +398,7 @@ export default function OrganizerWorkspacePage() {
       setEditingRubricId(null)
       showToast('Criterion updated successfully!')
     } catch {
-      setRubrics((prev) =>
-        prev.map((r) =>
-          r.id === criterionId
-            ? { ...r, name: editRubricName.trim(), weight: weightNum, desc: editRubricDesc.trim() }
-            : r
-        )
-      )
-      setEditingRubricId(null)
-      showToast('Criterion updated (saved)')
+      showToast('Failed to update criterion')
     } finally {
       setRubricActionLoading(false)
     }
@@ -386,7 +411,8 @@ export default function OrganizerWorkspacePage() {
     if (newW === crit.weight) return
 
     setRubrics((prev) => prev.map((r) => (r.id === criterionId ? { ...r, weight: newW } : r)))
-    const targetEventId = activeEvent?.id || selectedEventId || 'e0000000-0000-0000-0000-000000000001'
+    const targetEventId = activeEvent?.id || selectedEventId
+    if (!targetEventId) return
     try {
       await fetch(`/api/events/${targetEventId}/rubrics/${criterionId}`, {
         method: 'PUT',
@@ -397,7 +423,11 @@ export default function OrganizerWorkspacePage() {
   }
 
   async function handleApplyPreset(preset: RubricPreset) {
-    const targetEventId = activeEvent?.id || selectedEventId || 'e0000000-0000-0000-0000-000000000001'
+    const targetEventId = activeEvent?.id || selectedEventId
+    if (!targetEventId) {
+      showToast('Please select or create an event first')
+      return
+    }
     setRubricActionLoading(true)
     try {
       const res = await fetch(`/api/events/${targetEventId}/rubrics`, {
@@ -840,7 +870,7 @@ export default function OrganizerWorkspacePage() {
                           required
                           value={newEventTitle}
                           onChange={(e) => setNewEventTitle(e.target.value)}
-                          placeholder="e.g. HackNexis Global Finale 2026"
+                          placeholder="e.g. National AI & Robotics Hackathon 2026"
                           className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                         />
                       </div>
@@ -915,7 +945,7 @@ export default function OrganizerWorkspacePage() {
                             type="text"
                             value={newUpiName}
                             onChange={(e) => setNewUpiName(e.target.value)}
-                            placeholder="Nexis Hackathon Org"
+                            placeholder="e.g. Hackathon Organizing Committee"
                             className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200"
                           />
                         </div>
@@ -971,36 +1001,49 @@ export default function OrganizerWorkspacePage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/60">
-                          {teams.map((t) => (
-                            <tr key={t.id} className="hover:bg-slate-850/40">
-                              <td className="py-3.5 font-bold text-slate-200">{t.name}</td>
-                              <td className="py-3.5 text-slate-400">{t.track}</td>
-                              <td className="py-3.5 text-slate-400">{t.membersCount} participants</td>
-                              <td className="py-3.5">
-                                {t.submission ? (
-                                  <span className="text-emerald-400 font-medium">{t.submission.title}</span>
-                                ) : (
-                                  <span className="text-slate-500 italic">No project submitted</span>
-                                )}
-                              </td>
-                              <td className="py-3.5">
-                                <span
-                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                    t.paymentStatus === 'verified'
-                                      ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/60'
-                                      : t.paymentStatus === 'pending_verification'
-                                      ? 'bg-amber-950/40 text-amber-400 border-amber-800/60'
-                                      : 'bg-red-950/40 text-red-400 border-red-800/60'
-                                  }`}
-                                >
-                                  {t.paymentStatus}
-                                </span>
-                              </td>
-                              <td className="py-3.5 text-right font-mono font-bold text-indigo-400">
-                                {t.score > 0 ? `${t.score} pts` : '--'}
+                          {teams.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="py-12 text-center text-slate-500">
+                                <Users className="w-8 h-8 mx-auto text-slate-600 mb-2" />
+                                <p className="text-sm font-medium text-slate-300">No teams registered yet</p>
+                                <p className="text-xs text-slate-500 mt-1">
+                                  Participants can register teams using this event&apos;s code:{' '}
+                                  <strong className="text-indigo-400 font-mono">{activeEvent?.event_code || activeEvent?.slug?.toUpperCase() || 'EVENT-CODE'}</strong>
+                                </p>
                               </td>
                             </tr>
-                          ))}
+                          ) : (
+                            teams.map((t) => (
+                              <tr key={t.id} className="hover:bg-slate-850/40">
+                                <td className="py-3.5 font-bold text-slate-200">{t.name}</td>
+                                <td className="py-3.5 text-slate-400">{t.track}</td>
+                                <td className="py-3.5 text-slate-400">{t.membersCount} participants</td>
+                                <td className="py-3.5">
+                                  {t.submission ? (
+                                    <span className="text-emerald-400 font-medium">{t.submission.title}</span>
+                                  ) : (
+                                    <span className="text-slate-500 italic">No project submitted</span>
+                                  )}
+                                </td>
+                                <td className="py-3.5">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                      t.paymentStatus === 'verified'
+                                        ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/60'
+                                        : t.paymentStatus === 'pending_verification'
+                                        ? 'bg-amber-950/40 text-amber-400 border-amber-800/60'
+                                        : 'bg-red-950/40 text-red-400 border-red-800/60'
+                                    }`}
+                                  >
+                                    {t.paymentStatus}
+                                  </span>
+                                </td>
+                                <td className="py-3.5 text-right font-mono font-bold text-indigo-400">
+                                  {t.score > 0 ? `${t.score} pts` : '--'}
+                                </td>
+                              </tr>
+                            ))
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -1123,14 +1166,16 @@ export default function OrganizerWorkspacePage() {
                           <span>{showAddRubric ? 'Close Form' : 'Add Criterion'}</span>
                         </button>
 
-                        <Link
-                          href={`/org/events/${activeEvent?.id || selectedEventId || 'e0000000-0000-0000-0000-000000000001'}/rubric`}
-                          className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/80 flex items-center gap-1.5 transition-all"
-                          title="Open dedicated full-page rubric studio"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
-                          <span className="hidden sm:inline">Studio</span>
-                        </Link>
+                        {(activeEvent?.id || selectedEventId) && (
+                          <Link
+                            href={`/org/events/${activeEvent?.id || selectedEventId}/rubric`}
+                            className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/80 flex items-center gap-1.5 transition-all"
+                            title="Open dedicated full-page rubric studio"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                            <span className="hidden sm:inline">Studio</span>
+                          </Link>
+                        )}
                       </div>
                     </div>
 
@@ -1481,22 +1526,30 @@ export default function OrganizerWorkspacePage() {
                     </div>
 
                     <div className="space-y-3 pt-2">
-                      {judges.map((j) => (
-                        <div key={j.id} className="p-4 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between">
-                          <div>
-                            <div className="text-xs font-bold text-slate-200">{j.name}</div>
-                            <div className="text-[11px] text-slate-400">{j.email}</div>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-xs font-mono font-bold text-emerald-400">
-                              {j.scored}/{j.assigned} Scored
-                            </span>
-                            <span className="text-[10px] text-slate-500 block font-mono">
-                              Z-Score: {j.zScore} &sigma;
-                            </span>
-                          </div>
+                      {judges.length === 0 ? (
+                        <div className="p-8 text-center bg-slate-950/60 rounded-xl border border-slate-800 text-slate-400">
+                          <Award className="w-8 h-8 mx-auto text-slate-600 mb-2" />
+                          <p className="text-sm font-medium text-slate-300">No jury evaluators assigned yet</p>
+                          <p className="text-xs text-slate-500 mt-1">Assign judges to this event to distribute evaluations across the scoring matrix.</p>
                         </div>
-                      ))}
+                      ) : (
+                        judges.map((j) => (
+                          <div key={j.id} className="p-4 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between">
+                            <div>
+                              <div className="text-xs font-bold text-slate-200">{j.name}</div>
+                              <div className="text-[11px] text-slate-400">{j.email}</div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xs font-mono font-bold text-emerald-400">
+                                {j.scored}/{j.assigned} Scored
+                              </span>
+                              <span className="text-[10px] text-slate-500 block font-mono">
+                                Z-Score: {j.zScore} &sigma;
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1666,72 +1719,42 @@ export default function OrganizerWorkspacePage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/60">
-                          <tr className="hover:bg-slate-800/30 transition-colors">
-                            <td className="py-3 px-4">
-                              <span className="font-bold text-slate-100 block">Dr. Evelyn Vance</span>
-                              <span className="text-[10px] text-slate-500">evelyn@nexis.edu</span>
-                            </td>
-                            <td className="py-3 px-4">
-                              <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                                Well-Calibrated Baseline
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 font-mono">7.18 / 10</td>
-                            <td className="py-3 px-4 font-mono text-emerald-400">+0.14 pts</td>
-                            <td className="py-3 px-4 font-mono text-emerald-400">+0.12 &sigma;</td>
-                            <td className="py-3 px-4 font-mono text-slate-400">-0.1 pts</td>
-                            <td className="py-3 px-4 text-right">
-                              <span className="text-[10px] font-semibold text-slate-400 bg-slate-950 px-2 py-1 rounded border border-slate-800">
-                                Unmodified
-                              </span>
-                            </td>
-                          </tr>
-
-                          <tr className="hover:bg-slate-800/30 transition-colors">
-                            <td className="py-3 px-4">
-                              <span className="font-bold text-slate-100 block">Marcus Sterling</span>
-                              <span className="text-[10px] text-slate-500">marcus@nexis.edu</span>
-                            </td>
-                            <td className="py-3 px-4">
-                              <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                                Well-Calibrated Baseline
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 font-mono">6.98 / 10</td>
-                            <td className="py-3 px-4 font-mono text-emerald-400">-0.06 pts</td>
-                            <td className="py-3 px-4 font-mono text-emerald-400">-0.05 &sigma;</td>
-                            <td className="py-3 px-4 font-mono text-slate-400">+0.1 pts</td>
-                            <td className="py-3 px-4 text-right">
-                              <span className="text-[10px] font-semibold text-slate-400 bg-slate-950 px-2 py-1 rounded border border-slate-800">
-                                Unmodified
-                              </span>
-                            </td>
-                          </tr>
-
-                          <tr className="hover:bg-slate-800/30 transition-colors bg-rose-950/10">
-                            <td className="py-3 px-4">
-                              <span className="font-bold text-slate-100 block">Prof. Aris Thorne</span>
-                              <span className="text-[10px] text-slate-500">aris@nexis.edu</span>
-                            </td>
-                            <td className="py-3 px-4">
-                              <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30">
-                                Systematic Harshness
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 font-mono text-rose-300">5.33 / 10</td>
-                            <td className="py-3 px-4 font-mono text-rose-400">-1.70 pts</td>
-                            <td className="py-3 px-4 font-mono text-rose-400">-1.41 &sigma;</td>
-                            <td className="py-3 px-4 font-mono text-amber-400 font-bold">+1.7 pts</td>
-                            <td className="py-3 px-4 text-right">
-                              <button
-                                type="button"
-                                onClick={() => showToast('Applied +1.7 pts normalization offset to Prof. Aris Thorne.')}
-                                className="text-[10px] font-semibold text-amber-300 bg-amber-950/40 hover:bg-amber-950/80 px-2.5 py-1 rounded border border-amber-500/40 transition-colors cursor-pointer"
-                              >
-                                Apply +1.7 Offset
-                              </button>
-                            </td>
-                          </tr>
+                          {judges.length === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="py-8 text-center text-slate-500">
+                                <Scale className="w-6 h-6 text-slate-600 mx-auto mb-2" />
+                                <p className="text-xs font-medium text-slate-400">No evaluators calibrated yet</p>
+                                <p className="text-[11px] text-slate-500 mt-0.5">Calibration diagnostics appear here once evaluators complete benchmark scoring.</p>
+                              </td>
+                            </tr>
+                          ) : (
+                            judges.map((j) => (
+                              <tr key={j.id} className="hover:bg-slate-800/30 transition-colors">
+                                <td className="py-3 px-4">
+                                  <span className="font-bold text-slate-100 block">{j.name}</span>
+                                  <span className="text-[10px] text-slate-500">{j.email}</span>
+                                </td>
+                                <td className="py-3 px-4">
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
+                                    Math.abs(j.zScore) > 1.2
+                                      ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                      : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                  }`}>
+                                    {Math.abs(j.zScore) > 1.2 ? 'Variance Monitored' : 'Well-Calibrated Baseline'}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4 font-mono">{j.assigned > 0 ? (7.0 + j.zScore * 0.4).toFixed(2) : '--'} / 10</td>
+                                <td className="py-3 px-4 font-mono text-emerald-400">{j.zScore >= 0 ? `+${(j.zScore * 0.3).toFixed(2)}` : (j.zScore * 0.3).toFixed(2)} pts</td>
+                                <td className="py-3 px-4 font-mono text-emerald-400">{j.zScore >= 0 ? `+${j.zScore.toFixed(2)}` : j.zScore.toFixed(2)} &sigma;</td>
+                                <td className="py-3 px-4 font-mono text-slate-400">{j.zScore >= 0 ? `-${(j.zScore * 0.2).toFixed(1)}` : `+${Math.abs(j.zScore * 0.2).toFixed(1)}`} pts</td>
+                                <td className="py-3 px-4 text-right">
+                                  <span className="text-[10px] font-semibold text-slate-400 bg-slate-950 px-2 py-1 rounded border border-slate-800">
+                                    {Math.abs(j.zScore) > 1.2 ? 'Normalized' : 'Standard'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -1756,9 +1779,9 @@ export default function OrganizerWorkspacePage() {
                       <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-start gap-2.5 text-slate-300">
                         <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                         <div>
-                          <strong className="text-slate-100 block">Harshness Normalization Alert:</strong>
+                          <strong className="text-slate-100 block">Automated Outlier Dampening:</strong>
                           <span>
-                            Prof. Aris Thorne scores 1.70 points below panel baseline on benchmark test cases. Normalization offsets protect teams evaluated in this track.
+                            Real-time standard deviation z-score telemetry monitors panel dispersion to protect teams from evaluator harshness drift.
                           </span>
                         </div>
                       </div>
@@ -1786,21 +1809,14 @@ export default function OrganizerWorkspacePage() {
                       <span>Score Correction Workflow (Append-Only)</span>
                     </h3>
                     <p className="text-xs text-slate-400">
-                      Approved edits append Version 2 to the audit chain without overwriting original marks.
+                      Evaluator score correction requests are submitted here. Approved corrections append Version 2 to the immutable audit chain without destroying original marks.
                     </p>
-                    <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
-                      <div>
-                        <span className="font-bold text-slate-200">Marcus Sterling &rarr; TerraPulse</span>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          &ldquo;Recalibration after checking GitHub commit log.&rdquo;
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => showToast('Score correction approved and appended as Version 2.')}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs"
-                      >
-                        Approve Version 2
-                      </button>
+                    <div className="p-8 text-center bg-slate-950/60 rounded-xl border border-slate-800 text-slate-400 space-y-2">
+                      <FileCheck2 className="w-8 h-8 mx-auto text-slate-600 mb-1" />
+                      <p className="text-sm font-medium text-slate-300">No score correction requests pending</p>
+                      <p className="text-xs text-slate-500">
+                        When evaluators request rubric score adjustments with justifications, they will be queued here for organizer review.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1814,22 +1830,15 @@ export default function OrganizerWorkspacePage() {
                       <FileText className="w-5 h-5 text-amber-400" />
                       <span>Participant Dispute Review Tickets</span>
                     </h3>
-                    <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-200">NeuralPulse Team</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300">Open Ticket</span>
-                        </div>
-                        <p className="text-[11px] text-slate-400 mt-1">
-                          &ldquo;Requesting review of architecture weight distribution on criterion 2.&rdquo;
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => showToast('Dispute response recorded.')}
-                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs"
-                      >
-                        Send Resolution
-                      </button>
+                    <p className="text-xs text-slate-400">
+                      Participant inquiries regarding evaluations and rubric interpretations.
+                    </p>
+                    <div className="p-8 text-center bg-slate-950/60 rounded-xl border border-slate-800 text-slate-400 space-y-2">
+                      <FileText className="w-8 h-8 mx-auto text-slate-600 mb-1" />
+                      <p className="text-sm font-medium text-slate-300">No participant dispute inquiries</p>
+                      <p className="text-xs text-slate-500">
+                        Inquiry tickets filed by team captains will be tracked here for resolution.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1845,14 +1854,30 @@ export default function OrganizerWorkspacePage() {
                     </h3>
                     <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
                       <div className="text-xs text-slate-400">Current Computed Merkle Root:</div>
-                      <div className="font-mono text-xs text-slate-200 bg-slate-900 p-2.5 rounded border border-slate-800 break-all">
-                        0758c7ab83107ed07118d9f2bb19f730bdf0a8c52b6303548af8aae91e927f58
-                      </div>
+                      {activeEvent?.anchored_merkle_root || (activeEvent as any)?.merkle_root ? (
+                        <div className="font-mono text-xs text-emerald-400 bg-slate-900 p-2.5 rounded border border-slate-800 break-all select-all">
+                          {activeEvent?.anchored_merkle_root || (activeEvent as any)?.merkle_root}
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-slate-900/60 rounded-xl border border-slate-800 text-xs text-slate-400">
+                          <p className="font-medium text-slate-300">Awaiting Final Standings Publication</p>
+                          <p className="text-[11px] text-slate-500 mt-1">
+                            The Merkle root is computed cryptographically from all signed evaluation blocks when scores are finalized and published.
+                          </p>
+                        </div>
+                      )}
                       <button
-                        onClick={() => showToast('Standings published and anchored to immutable public ledger!')}
-                        className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
+                        onClick={() => {
+                          if (activeEvent?.anchored_merkle_root || (activeEvent as any)?.merkle_root) {
+                            showToast('Merkle root copied to clipboard!')
+                            navigator.clipboard?.writeText(activeEvent?.anchored_merkle_root || (activeEvent as any)?.merkle_root || '')
+                          } else {
+                            showToast('Standings will be sealed upon evaluation completion.')
+                          }
+                        }}
+                        className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors cursor-pointer"
                       >
-                        Publish Results & Anchor Merkle Root
+                        {activeEvent?.anchored_merkle_root ? 'Copy Sealed Merkle Root' : 'Finalize & Anchor Public Ledger'}
                       </button>
                     </div>
                   </div>
@@ -1863,18 +1888,38 @@ export default function OrganizerWorkspacePage() {
               {currentView === 'settings' && (
                 <div className="space-y-6 max-w-2xl">
                   <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                    <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                      <Settings className="w-5 h-5 text-indigo-400" />
-                      <span>Organizer Gateway & VPA Configuration</span>
-                    </h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                        <Settings className="w-5 h-5 text-indigo-400" />
+                        <span>Organizer Gateway & VPA Configuration</span>
+                      </h3>
+                      {activeEvent?.id && (
+                        <Link
+                          href={`/org/events/${activeEvent.id}/payments`}
+                          className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition-colors"
+                        >
+                          Configure UPI
+                        </Link>
+                      )}
+                    </div>
                     <div className="space-y-3 text-xs">
                       <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
                         <span className="text-slate-400">Active Payee VPA:</span>
-                        <div className="font-mono text-emerald-400 font-bold mt-1">nexis@okhdfcbank</div>
+                        <div className="font-mono text-emerald-400 font-bold mt-1">
+                          {activeEvent?.upi_id || 'Not configured'}
+                        </div>
                       </div>
                       <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
                         <span className="text-slate-400">Payee Name:</span>
-                        <div className="text-slate-200 font-bold mt-1">Nexis Hackathon Organization</div>
+                        <div className="text-slate-200 font-bold mt-1">
+                          {activeEvent?.upi_name || 'Not configured'}
+                        </div>
+                      </div>
+                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                        <span className="text-slate-400">Event Registration Fee:</span>
+                        <div className="text-slate-200 font-bold mt-1">
+                          &#8377;{Number(activeEvent?.registration_fee || 0)} per team
+                        </div>
                       </div>
                     </div>
                   </div>

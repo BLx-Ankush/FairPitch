@@ -70,32 +70,10 @@ export async function POST(request: Request) {
         .single()
 
       if (instErr || !inst) {
-        // Fallback auto-provisioning for standard seed institutions in live testing environments
-        if (
-          institutionId === 'a0000000-0000-0000-0000-000000000001' ||
-          institutionId === 'a0000000-0000-0000-0000-000000000002'
-        ) {
-          const defaultName =
-            institutionId === 'a0000000-0000-0000-0000-000000000001'
-              ? 'Nexis Institute of Technology'
-              : 'Apex Global University'
-          const defaultSlug =
-            institutionId === 'a0000000-0000-0000-0000-000000000001'
-              ? 'nexis-tech'
-              : 'apex-global'
-          await serviceClient.from('institutions').upsert({
-            id: institutionId,
-            name: defaultName,
-            slug: defaultSlug,
-            status: 'active',
-          })
-          inst = { id: institutionId }
-        } else {
-          return NextResponse.json(
-            { error: 'Selected institution is invalid or does not exist' },
-            { status: 400 }
-          )
-        }
+        return NextResponse.json(
+          { error: 'Selected institution is invalid or does not exist' },
+          { status: 400 }
+        )
       }
 
       assignedInstitutionId = inst.id

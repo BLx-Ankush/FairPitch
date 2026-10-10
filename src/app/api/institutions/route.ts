@@ -13,31 +13,20 @@ export async function GET() {
       .order('name', { ascending: true })
 
     if (error) {
-      console.warn('Institutions fetch error, falling back to default institutions:', error.message)
-      return NextResponse.json({
-        success: true,
-        institutions: [
-          { id: 'a0000000-0000-0000-0000-000000000001', name: 'Nexis Institute of Technology', slug: 'nexis-tech', domain: 'nexis.edu' },
-          { id: 'a0000000-0000-0000-0000-000000000002', name: 'Apex Metropolitan University', slug: 'apex-uni', domain: 'apex.edu' },
-        ],
-      })
+      console.error('Institutions fetch error:', error.message)
+      return NextResponse.json({ success: false, error: error.message, institutions: [] }, { status: 500 })
     }
 
     return NextResponse.json({
       success: true,
-      institutions: institutions && institutions.length > 0 ? institutions : [
-        { id: 'a0000000-0000-0000-0000-000000000001', name: 'Nexis Institute of Technology', slug: 'nexis-tech', domain: 'nexis.edu' },
-        { id: 'a0000000-0000-0000-0000-000000000002', name: 'Apex Metropolitan University', slug: 'apex-uni', domain: 'apex.edu' },
-      ],
+      institutions: institutions || [],
     })
   } catch (err: any) {
-    console.warn('Institutions service unavailable, returning fallback institutions:', err.message)
+    console.error('Institutions service unavailable:', err.message)
     return NextResponse.json({
-      success: true,
-      institutions: [
-        { id: 'a0000000-0000-0000-0000-000000000001', name: 'Nexis Institute of Technology', slug: 'nexis-tech', domain: 'nexis.edu' },
-        { id: 'a0000000-0000-0000-0000-000000000002', name: 'Apex Metropolitan University', slug: 'apex-uni', domain: 'apex.edu' },
-      ],
-    })
+      success: false,
+      error: err.message || 'Failed to fetch institutions',
+      institutions: [],
+    }, { status: 500 })
   }
 }

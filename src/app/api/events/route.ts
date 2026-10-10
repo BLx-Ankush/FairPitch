@@ -3,7 +3,6 @@ import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
 
 import { getAuthUser, getUserProfile } from '@/lib/auth/session'
-import { DEMO_EVENTS } from '@/lib/demo-store'
 
 export async function GET() {
   try {
@@ -13,36 +12,30 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if ((user as any)?.isDemo) {
-      return NextResponse.json({ success: true, events: DEMO_EVENTS })
+    const supabase = await createClient()
+    const profile = await getUserProfile(user.id)
+
+    const query = supabase
+      .from('events')
+      .select('*, institutions(name)')
+
+    // Scope to institution unless platform owner
+    if (profile?.role !== 'platform_owner' && profile?.institution_id) {
+      query.eq('institution_id', profile.institution_id)
     }
 
-    try {
-      const supabase = await createClient()
-      const profile = await getUserProfile(user.id)
+    const { data: events, error: listErr } = await query.order('created_at', { ascending: false })
 
-      const query = supabase
-        .from('events')
-        .select('*, institutions(name)')
-
-      // Scope to institution unless platform owner
-      if (profile?.role !== 'platform_owner' && profile?.institution_id) {
-        query.eq('institution_id', profile.institution_id)
-      }
-
-      const { data: events, error: listErr } = await query.order('created_at', { ascending: false })
-
-      if (!listErr && events && events.length > 0) {
-        return NextResponse.json({ success: true, events })
-      }
-    } catch {
-      // Database not reachable, use demo fallback
+    if (listErr) {
+      return NextResponse.json({ error: listErr.message }, { status: 500 })
     }
 
-    // Fallback to seeded demo event
-    return NextResponse.json({ success: true, events: DEMO_EVENTS })
+    return NextResponse.json({ success: true, events: events || [] })
   } catch (err: any) {
-    return NextResponse.json({ success: true, events: DEMO_EVENTS })
+    return NextResponse.json(
+      { error: err.message || 'Internal server error' },
+      { status: 500 }
+    )
   }
 }
 

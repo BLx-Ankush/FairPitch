@@ -33,16 +33,6 @@ export async function POST(request: Request) {
       p_criterion_scores: criterionPayload,
     })
 
-    const { user } = auth.caller
-
-    if ((user as any)?.email === 'evelyn@nexis.edu' || String(teamId).startsWith('t0000000')) {
-      return NextResponse.json({
-        success: true,
-        message: 'Evaluation committed to append-only audit ledger',
-        scoreIds: ['demo-score-1', 'demo-score-2'],
-      })
-    }
-
     if (rpcErr) {
       return NextResponse.json(
         { error: rpcErr.message },

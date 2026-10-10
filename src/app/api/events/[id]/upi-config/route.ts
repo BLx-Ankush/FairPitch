@@ -3,7 +3,6 @@ import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
 import { requireEventOrganizer } from '@/lib/auth/guards'
 
-
 // GET: public / participant access to event UPI details
 export async function GET(
   request: Request,
@@ -20,22 +19,6 @@ export async function GET(
       .single()
 
     if (eventErr || !event) {
-      if (id === 'e0000000-0000-0000-0000-000000000001' || process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
-        return NextResponse.json({
-          success: true,
-          event: {
-            id,
-            title: 'National AI Hackathon 2026',
-            registrationFee: 250,
-            isFree: false,
-            upiId: 'organizer@fairpitch.upi',
-            upiName: 'FairPitch Official Organizer',
-            upiQrUrl: null,
-            hasUpiConfigured: true,
-            autoVerifyUpi: true,
-          },
-        })
-      }
       return NextResponse.json({ error: 'Event not found' }, { status: 404 })
     }
 
@@ -57,22 +40,6 @@ export async function GET(
       },
     })
   } catch (err: any) {
-    if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
-      return NextResponse.json({
-        success: true,
-        event: {
-          id: 'e0000000-0000-0000-0000-000000000001',
-          title: 'National AI Hackathon 2026',
-          registrationFee: 250,
-          isFree: false,
-          upiId: 'organizer@fairpitch.upi',
-          upiName: 'FairPitch Official Organizer',
-          upiQrUrl: null,
-          hasUpiConfigured: true,
-          autoVerifyUpi: true,
-        },
-      })
-    }
     return NextResponse.json(
       { error: err.message || 'Internal server error' },
       { status: 500 }
@@ -89,9 +56,6 @@ export async function POST(
     const { id } = await params
     const auth = await requireEventOrganizer(id)
     if (auth.errorResponse) return auth.errorResponse
-
-    const supabase = await createClient()
-
 
     const body = await request.json()
     const { registrationFee = 0, upiId, upiName, upiQrUrl, autoVerifyUpi = false } = body
@@ -127,21 +91,6 @@ export async function POST(
       .single()
 
     if (updateErr) {
-      if (id === 'e0000000-0000-0000-0000-000000000001' || process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
-        return NextResponse.json({
-          success: true,
-          message: 'Event UPI & registration fee configuration updated successfully! (Demo Mode)',
-          event: {
-            id,
-            title: 'National AI Hackathon 2026',
-            registration_fee: feeNum,
-            upi_id: upiId ? upiId.trim() : null,
-            upi_name: upiName ? upiName.trim() : null,
-            upi_qr_url: upiQrUrl ? upiQrUrl.trim() : null,
-            auto_verify_upi: Boolean(autoVerifyUpi),
-          },
-        })
-      }
       return NextResponse.json({ error: updateErr.message }, { status: 500 })
     }
 

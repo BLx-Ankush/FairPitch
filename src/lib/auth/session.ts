@@ -5,31 +5,13 @@ import { type AuthContext, type UserProfile, type UserEventRole, CURRENT_CONSENT
 export { CURRENT_CONSENT_VERSION }
 
 /**
- * Retrieves the currently authenticated Supabase auth user (or demo user).
+ * Retrieves the currently authenticated Supabase auth user.
  */
 export async function getAuthUser() {
   try {
     const supabase = await createClient()
     const { data: { user }, error } = await supabase.auth.getUser()
     if (!error && user) return user
-  } catch {}
-
-  // Check signed demo cookie fallback (only valid in non-production with demo mode enabled)
-  try {
-    const { cookies } = await import('next/headers')
-    const { DEMO_COOKIE_NAME, verifyDemoCookie } = await import('@/lib/auth/demo-cookie')
-    const cookieStore = await cookies()
-    const demoCookie = cookieStore.get(DEMO_COOKIE_NAME)?.value
-    const demoData = await verifyDemoCookie(demoCookie)
-    if (demoData) {
-      return {
-        id: demoData.id,
-        email: demoData.email,
-        user_metadata: { full_name: demoData.full_name },
-        role: demoData.role,
-        isDemo: true,
-      } as any
-    }
   } catch {}
 
   return null
@@ -48,27 +30,6 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
       .single()
 
     if (!error && data) return data as UserProfile
-  } catch {}
-
-  // Check signed demo cookie fallback (only valid in non-production with demo mode enabled)
-  try {
-    const { cookies } = await import('next/headers')
-    const { DEMO_COOKIE_NAME, verifyDemoCookie } = await import('@/lib/auth/demo-cookie')
-    const cookieStore = await cookies()
-    const demoCookie = cookieStore.get(DEMO_COOKIE_NAME)?.value
-    const demoData = await verifyDemoCookie(demoCookie)
-    if (demoData && demoData.id === userId) {
-      return {
-        id: demoData.id,
-        email: demoData.email,
-        full_name: demoData.full_name,
-        role: demoData.role,
-        organizer_approval_status: demoData.organizer_approval_status,
-        institution_id: demoData.institution_id,
-        created_at: new Date(demoData.timestamp).toISOString(),
-        updated_at: new Date().toISOString(),
-      } as UserProfile
-    }
   } catch {}
 
   return null

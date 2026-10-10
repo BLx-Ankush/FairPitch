@@ -7,12 +7,16 @@ export interface Event {
   institution_id: string
   title: string
   slug: string
+  event_code?: string | null
   description: string | null
   start_date: string
   end_date: string
   registration_deadline: string | null
   submission_deadline: string | null
   status: EventStatus
+  registration_fee?: number | null
+  upi_id?: string | null
+  upi_name?: string | null
   blind_mode: boolean
   min_judges_per_team: number
   judging_mode: JudgingMode

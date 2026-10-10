@@ -168,9 +168,7 @@ export async function requireEventOrganizer(eventId?: string | null): Promise<
     const isAuthorized =
       event?.created_by === caller.user.id ||
       (eventRole && eventRole.length > 0) ||
-      (event?.institution_id && event.institution_id === caller.profile.institution_id) ||
-      (process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && (caller.profile.role === 'organizer' || caller.profile.role === 'institution_admin')) ||
-      (eventId === 'e0000000-0000-0000-0000-000000000001')
+      (event?.institution_id && event.institution_id === caller.profile.institution_id)
 
     if (!isAuthorized) {
       return {
@@ -197,11 +195,6 @@ export async function requireJury(eventId?: string | null): Promise<
   if (auth.errorResponse) return auth
 
   const { caller } = auth
-
-  // Demo jury access check
-  if (caller.user.isJury) {
-    return { caller, errorResponse: null }
-  }
 
   const serviceClient = getServiceSupabase()
   const query = serviceClient

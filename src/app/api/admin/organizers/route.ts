@@ -9,29 +9,6 @@ export async function GET() {
 
     const { user, profile } = auth.caller
 
-    // Demo fallback in dev
-    if ((user as any)?.email === 'admin@nexis.edu') {
-      return NextResponse.json({
-        success: true,
-        organizers: [
-          {
-            id: 'org-sample-1',
-            full_name: 'Aarav Patel',
-            email: 'aarav.p@nexis.edu',
-            organizer_approval_status: 'pending',
-            created_at: '2026-10-01T14:20:00Z',
-          },
-          {
-            id: 'b0000000-0000-0000-0000-000000000002',
-            full_name: 'Kavita Rao',
-            email: 'organizer@nexis.edu',
-            organizer_approval_status: 'approved',
-            created_at: '2026-09-20T10:00:00Z',
-          },
-        ],
-      })
-    }
-
     const supabase = await createClient()
 
     // List organizers within caller's institution

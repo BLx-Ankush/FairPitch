@@ -295,7 +295,7 @@ export default function InviteRedemptionPage({
                         required
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        placeholder="Dr. Evelyn Reed"
+                        placeholder="e.g. Dr. Alex Mercer"
                         className="block w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                       />
                     </div>

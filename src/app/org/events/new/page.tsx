@@ -118,7 +118,7 @@ export default function NewEventPage() {
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Nexis AI Global Hackathon 2026"
+                placeholder="e.g. National AI & Robotics Hackathon 2026"
                 className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
               />
             </div>

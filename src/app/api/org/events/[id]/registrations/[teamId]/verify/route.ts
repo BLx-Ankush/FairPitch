@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
 import { getAuthUser } from '@/lib/auth/session'
-import { demoTeams } from '@/lib/demo-store'
 import { requireEventOrganizer } from '@/lib/auth/guards'
 
 export async function POST(
@@ -16,29 +15,8 @@ export async function POST(
 
     const user = auth.caller.user
 
-
     const body = await request.json()
     const { action = 'approve', note } = body
-
-    if ((user as any)?.isDemo) {
-      const demoTeam = demoTeams.find((t) => t.id === teamId)
-      if (demoTeam) {
-        if (action === 'approve') {
-          demoTeam.payment_status = 'verified'
-          demoTeam.status = 'approved'
-          demoTeam.join_code = demoTeam.team_code
-          demoTeam.amount_paid = 500
-        } else {
-          demoTeam.payment_status = 'unpaid'
-          demoTeam.utr_number = null
-        }
-        return NextResponse.json({
-          success: true,
-          action: action === 'approve' ? 'approved' : 'rejected',
-          team: demoTeam,
-        })
-      }
-    }
 
     const supabase = await createClient()
 

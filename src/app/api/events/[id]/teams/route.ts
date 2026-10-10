@@ -53,7 +53,6 @@ export async function GET(
 }
 
 import { getAuthUser } from '@/lib/auth/session'
-import { createDemoTeam, DEMO_EVENTS } from '@/lib/demo-store'
 
 export async function POST(
   request: Request,
@@ -69,29 +68,6 @@ export async function POST(
 
     const body = await request.json()
     const { action = 'create', name, tagline, track, teamCode } = body
-
-    if ((user as any)?.isDemo) {
-      if (action === 'create') {
-        if (!name) {
-          return NextResponse.json({ error: 'Team name is required' }, { status: 400 })
-        }
-        const result = await createDemoTeam({
-          eventId: id,
-          name,
-          tagline,
-          track,
-          userId: user.id,
-          userEmail: user.email || 'ada@nexis.edu',
-          userName: (user as any).user_metadata?.full_name || 'Ada Lovelace',
-        })
-        return NextResponse.json({
-          success: true,
-          team: result.team,
-          requiresPayment: result.requiresPayment,
-          upiQr: result.upiQr,
-        })
-      }
-    }
 
     const supabase = await createClient()
     const serviceClient = getServiceSupabase()

@@ -12,8 +12,6 @@ export async function PUT(
     const auth = await requireEventOrganizer(id)
     if (auth.errorResponse) return auth.errorResponse
 
-    const supabase = await createClient()
-
     const body = await request.json()
     const { name, description, weight, maxScore, scoreBands, orderIndex } = body
 
@@ -35,29 +33,11 @@ export async function PUT(
       .single()
 
     if (updateErr) {
-      if (id === 'e0000000-0000-0000-0000-000000000001' || process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
-        return NextResponse.json({
-          success: true,
-          criterion: {
-            id: criterionId,
-            event_id: id,
-            ...updates,
-          },
-          message: 'Criterion updated successfully (Demo Mode)',
-        })
-      }
       return NextResponse.json({ error: updateErr.message }, { status: 400 })
     }
 
     return NextResponse.json({ success: true, criterion: updated })
   } catch (err: any) {
-    if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
-      return NextResponse.json({
-        success: true,
-        criterion: { id: criterionId, event_id: id },
-        message: 'Criterion updated successfully (Demo Mode)',
-      })
-    }
     return NextResponse.json(
       { error: err.message || 'Internal server error' },
       { status: 500 }
@@ -76,30 +56,18 @@ export async function DELETE(
 
     const serviceClient = getServiceSupabase()
 
-    let delErr: any = null
-    try {
-      const res = await serviceClient
-        .from('rubric_criteria')
-        .delete()
-        .eq('id', criterionId)
-        .eq('event_id', id)
-      delErr = res.error
-    } catch (e: any) {
-      delErr = e
-    }
+    const { error: delErr } = await serviceClient
+      .from('rubric_criteria')
+      .delete()
+      .eq('id', criterionId)
+      .eq('event_id', id)
 
     if (delErr) {
-      if (id === 'e0000000-0000-0000-0000-000000000001' || process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
-        return NextResponse.json({ success: true, message: 'Criterion deleted successfully (Demo Mode)' })
-      }
       return NextResponse.json({ error: delErr.message }, { status: 400 })
     }
 
     return NextResponse.json({ success: true, message: 'Criterion deleted successfully' })
   } catch (err: any) {
-    if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
-      return NextResponse.json({ success: true, message: 'Criterion deleted successfully (Demo Mode)' })
-    }
     return NextResponse.json(
       { error: err.message || 'Internal server error' },
       { status: 500 }

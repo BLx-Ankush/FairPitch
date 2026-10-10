@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
 import { getAuthUser } from '@/lib/auth/session'
-import { demoTeams, DEMO_EVENTS } from '@/lib/demo-store'
 import { requireEventOrganizer } from '@/lib/auth/guards'
 
 export async function GET(
@@ -15,28 +14,6 @@ export async function GET(
     if (auth.errorResponse) return auth.errorResponse
 
     const user = auth.caller.user
-
-
-    if ((user as any)?.isDemo) {
-      const demoEvent = DEMO_EVENTS.find((e) => e.id === eventId) || DEMO_EVENTS[0]
-      const totalCollected = demoTeams
-        .filter((t) => t.payment_status === 'verified')
-        .reduce((sum, t) => sum + (t.amount_paid || 500), 0)
-      const pendingCount = demoTeams.filter((t) => t.payment_status === 'pending_verification').length
-
-      return NextResponse.json({
-        success: true,
-        event: demoEvent,
-        teams: demoTeams,
-        stats: {
-          totalTeams: demoTeams.length,
-          verifiedTeams: demoTeams.filter((t) => t.payment_status === 'verified').length,
-          pendingVerificationTeams: pendingCount,
-          unpaidTeams: demoTeams.filter((t) => t.payment_status === 'unpaid').length,
-          totalCollected,
-        },
-      })
-    }
 
     const supabase = await createClient()
 

@@ -254,28 +254,8 @@ export default function TeamAutopsyPage({
         </div>
 
         {/* JUDGE CONSENSUS & DISAGREEMENT SECTION */}
-        {(() => {
-          const consensus = lossData.judgeConsensus || {
-            overallAgreementPercent: 81,
-            consensusLevel: 'HIGH',
-            highDisagreementCount: 1,
-            criterionDisagreements: [
-              {
-                criterionId: 'crit-tech',
-                criterionName: 'Technical Architecture & Execution',
-                standardDeviation: 1.61,
-                level: 'High',
-                scores: [
-                  { judgeName: 'Dr. Evelyn Vance', score: 9.0 },
-                  { judgeName: 'Marcus Sterling', score: 5.5 },
-                  { judgeName: 'Prof. Aris Thorne', score: 8.7 },
-                ],
-                explanation:
-                  'The panel disagreement is concentrated around the claimed ML architecture. Two judges accepted the pipeline as novel, while Marcus Sterling considered it largely dependent on standard pre-trained models.',
-              },
-            ],
-          }
-
+        {lossData.judgeConsensus && (() => {
+          const consensus = lossData.judgeConsensus
           const highDisagreements = (consensus.criterionDisagreements || []).filter(
             (d: any) => d.level === 'High' || d.standardDeviation >= 1.4
           )

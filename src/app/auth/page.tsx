@@ -80,9 +80,6 @@ function AuthForm() {
   const [institutions, setInstitutions] = useState<Institution[]>([])
   const [loadingInstitutions, setLoadingInstitutions] = useState(false)
 
-  // Demo mode check
-  const isDemoActive = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
-
   useEffect(() => {
     if (currentRole === 'organizer' && activeTab === 'signup') {
       setLoadingInstitutions(true)
@@ -467,25 +464,7 @@ function AuthForm() {
     }
   }
 
-  // Demo Login (Only rendered in non-production when NEXT_PUBLIC_DEMO_MODE=true)
-  async function handleDemoLogin(role: string) {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/auth/demo-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      router.push(data.destination || roleConfig.defaultDest)
-      router.refresh()
-    } catch (err: any) {
-      setError(err.message || 'Demo sign-in failed')
-      setLoading(false)
-    }
-  }
+
 
   const RoleIcon = roleConfig.icon
 
@@ -902,7 +881,7 @@ function AuthForm() {
                           required
                           value={fullName}
                           onChange={(e) => setFullName(e.target.value)}
-                          placeholder="Dean Sarah Lin"
+                          placeholder="e.g. Administrator Full Name"
                           className="block w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
                         />
                       </div>
@@ -1127,56 +1106,6 @@ function AuthForm() {
                       </button>
                     </form>
                   )}
-                </div>
-              )}
-
-              {/* DEMO ACCESS SWITCHER (Only active when NEXT_PUBLIC_DEMO_MODE=true in non-production) */}
-              {isDemoActive && (
-                <div className="pt-4 border-t border-slate-800 space-y-3">
-                  <div className="flex items-center justify-between text-[11px] text-slate-500 font-semibold uppercase tracking-wider">
-                    <span>Local Development Quick Access</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                      Signed Demo
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleDemoLogin('participant')}
-                      disabled={loading}
-                      className="p-2.5 text-left rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-blue-500/40 text-xs transition-colors cursor-pointer"
-                    >
-                      <div className="font-semibold text-blue-400">Ada (Participant)</div>
-                      <div className="text-[10px] text-slate-500">Team Workspace</div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDemoLogin('organizer')}
-                      disabled={loading}
-                      className="p-2.5 text-left rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/40 text-xs transition-colors cursor-pointer"
-                    >
-                      <div className="font-semibold text-emerald-400">Kavita (Organizer)</div>
-                      <div className="text-[10px] text-slate-500">Event Operations</div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDemoLogin('jury')}
-                      disabled={loading}
-                      className="p-2.5 text-left rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-violet-500/40 text-xs transition-colors cursor-pointer"
-                    >
-                      <div className="font-semibold text-violet-400">Dr. Vance (Jury)</div>
-                      <div className="text-[10px] text-slate-500">Scoring Matrix</div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDemoLogin('institution_admin')}
-                      disabled={loading}
-                      className="p-2.5 text-left rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/40 text-xs transition-colors cursor-pointer"
-                    >
-                      <div className="font-semibold text-amber-400">Dean Lin (Admin)</div>
-                      <div className="text-[10px] text-slate-500">Institution Scope</div>
-                    </button>
-                  </div>
                 </div>
               )}
             </>

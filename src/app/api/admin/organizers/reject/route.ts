@@ -13,12 +13,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
     }
 
-    const { user } = auth.caller
-
-    if (String(userId).startsWith('org-sample') || (user as any)?.email === 'admin@nexis.edu') {
-      return NextResponse.json({ success: true, message: 'Organizer rejected successfully' })
-    }
-
     const supabase = await createClient()
 
     const { error: rpcErr } = await supabase.rpc('reject_organizer', {

@@ -3,7 +3,6 @@ import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
 import { validateUtrNumber } from '@/lib/payments/upi'
 import { getAuthUser } from '@/lib/auth/session'
-import { demoTeams } from '@/lib/demo-store'
 import { requireParticipant } from '@/lib/auth/guards'
 
 export async function POST(
@@ -17,7 +16,6 @@ export async function POST(
 
     const user = auth.caller.user
 
-
     const body = await request.json()
     const { utr } = body
 
@@ -27,19 +25,6 @@ export async function POST(
     }
 
     const cleanUtr = utr.trim().toUpperCase()
-
-    if ((user as any)?.isDemo) {
-      const demoTeam = demoTeams.find((t) => t.id === teamId)
-      if (demoTeam) {
-        demoTeam.utr_number = cleanUtr
-        demoTeam.payment_status = 'pending_verification'
-        return NextResponse.json({
-          success: true,
-          message: 'Payment reference submitted successfully for organizer verification',
-          team: demoTeam,
-        })
-      }
-    }
 
     const supabase = await createClient()
     const serviceClient = getServiceSupabase()

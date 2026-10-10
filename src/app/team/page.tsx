@@ -173,8 +173,11 @@ export default function TeamWorkspacePage() {
   const selectedEventFee = Number(selectedEvent?.registrationFee ?? selectedEvent?.registration_fee) || 0
 
   async function handleCreateTeam(e: React.FormEvent) {
-    e.preventDefault()
-    const targetEventId = verifiedEvent?.id || eventId || availableEvents[0]?.id || 'e0000000-0000-0000-0000-000000000001'
+    const targetEventId = verifiedEvent?.id || eventId || availableEvents[0]?.id
+    if (!targetEventId) {
+      setError('Please verify a valid event code before creating your team.')
+      return
+    }
 
     setActionLoading(true)
     setError(null)
@@ -1232,7 +1235,7 @@ export default function TeamWorkspacePage() {
               <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    Event: {team.events?.title || 'HackNexis 2026'}
+                    Event: {team.events?.title || 'Registered Event'}
                   </span>
                   <div className="flex items-center gap-2">
                     {team.join_code ? (

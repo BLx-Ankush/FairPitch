@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getAuthUser } from '@/lib/auth/session'
-import { findDemoTeamForUser } from '@/lib/demo-store'
 
 export async function GET() {
   try {
@@ -9,11 +8,6 @@ export async function GET() {
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    if ((user as any)?.isDemo) {
-      const demoTeam = findDemoTeamForUser(user.id)
-      return NextResponse.json({ success: true, team: demoTeam })
     }
 
     const supabase = await createClient()

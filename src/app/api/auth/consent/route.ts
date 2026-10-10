@@ -46,15 +46,17 @@ export async function POST(request: Request) {
       if (inst?.id) {
         institutionId = inst.id
       } else {
-        // Auto-provision default foundation institution so consent is NEVER blocked on clean DB
-        const defaultInstId = 'a0000000-0000-0000-0000-000000000001'
-        await serviceClient.from('institutions').upsert({
-          id: defaultInstId,
-          name: 'FairPitch Platform Foundation',
-          slug: 'fairpitch-foundation',
-          contact_email: 'compliance@fairpitch.io',
-        })
-        institutionId = defaultInstId
+        // Provision primary platform foundation institution if none exists yet
+        const { data: newInst } = await serviceClient
+          .from('institutions')
+          .insert({
+            name: 'FairPitch Platform Foundation',
+            slug: 'fairpitch-foundation',
+            contact_email: 'compliance@fairpitch.io',
+          })
+          .select('id')
+          .single()
+        institutionId = newInst?.id
       }
     }
 

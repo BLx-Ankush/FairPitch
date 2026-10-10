@@ -447,7 +447,7 @@ export default function AdminDashboardPage() {
               <h1 className="text-sm font-bold text-slate-100 flex items-center gap-2">
                 {viewTitles[currentView].title}
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold border border-emerald-500/30">
-                  {data?.institution?.name || 'Nexis Institute'}
+                  {data?.institution?.name || 'Assigned Institution'}
                 </span>
               </h1>
               <p className="text-xs text-slate-400">{viewTitles[currentView].subtitle}</p>
@@ -592,13 +592,13 @@ export default function AdminDashboardPage() {
                       <div className="text-2xl font-bold text-emerald-400">Tamper-Proof</div>
                       <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
                         <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                        <span>Chain verified ({primaryEvent?.totalBlocks || 103} blocks)</span>
+                        <span>Chain verified ({primaryEvent?.totalBlocks || 0} blocks)</span>
                       </p>
                     </div>
                   </div>
 
                   {/* Primary Event Mini-Timeline Card */}
-                  {primaryEvent && (
+                  {primaryEvent ? (
                     <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-6 shadow-xl space-y-4">
                       <div className="flex items-center justify-between">
                         <div>
@@ -652,6 +652,27 @@ export default function AdminDashboardPage() {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  ) : (
+                    <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-6 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 rounded-xl bg-indigo-500/10 text-indigo-400 shrink-0">
+                          <CalendarDays className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-slate-200">No Active Competition Cycles</h4>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            Create your first event from the organizer dashboard to launch judging tracks and rubric workflows.
+                          </p>
+                        </div>
+                      </div>
+                      <Link
+                        href="/org"
+                        className="text-xs px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors flex items-center gap-1.5 self-start sm:self-auto shrink-0 shadow-md shadow-indigo-600/20"
+                      >
+                        <span>Create Event</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
                     </div>
                   )}
 
@@ -738,91 +759,112 @@ export default function AdminDashboardPage() {
               )}
 
               {/* VIEW 2: TIMELINE */}
-              {currentView === 'timeline' && primaryEvent && (
-                <div className="space-y-6">
-                  <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
-                    <div>
-                      <h3 className="text-base font-bold text-slate-100">
-                        Competition Stage Progression Policy
-                      </h3>
-                      <p className="text-xs text-slate-400 mt-1">
-                        FairPitch enforces forward-only state transitions. Backward regressions are mathematically blocked.
-                      </p>
-                    </div>
+              {currentView === 'timeline' && (
+                primaryEvent ? (
+                  <div className="space-y-6">
+                    <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+                      <div>
+                        <h3 className="text-base font-bold text-slate-100">
+                          Competition Stage Progression Policy
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-1">
+                          FairPitch enforces forward-only state transitions. Backward regressions are mathematically blocked.
+                        </p>
+                      </div>
 
-                    <div className="space-y-4">
-                      {[
-                        {
-                          stage: 'Draft Stage',
-                          desc: 'Rubrics, criteria, and tracks configured. Total rubric weights must equal exactly 100%.',
-                          status: 'draft',
-                          date: primaryEvent.timeline.draft.date,
-                          done: true,
-                        },
-                        {
-                          stage: 'Registration (Open)',
-                          desc: 'Teams register, pay direct-to-organizer via UPI, and receive verified join codes.',
-                          status: 'open',
-                          date: primaryEvent.timeline.open.date,
-                          done: primaryEvent.timeline.open.completed,
-                          active: primaryEvent.status === 'open',
-                        },
-                        {
-                          stage: 'Blind Judging Phase',
-                          desc: 'Judges evaluate anonymized projects. Individual scores sealed from admins. Rubrics frozen.',
-                          status: 'judging',
-                          date: primaryEvent.timeline.judging.date,
-                          done: primaryEvent.timeline.judging.completed,
-                          active: primaryEvent.status === 'scoring' || primaryEvent.status === 'judging',
-                        },
-                        {
-                          stage: 'Review & Fairness Audit',
-                          desc: 'Outlier detection, fatigue drift analysis, and winner-flip simulations unlocked.',
-                          status: 'review',
-                          date: primaryEvent.timeline.review.date,
-                          done: primaryEvent.timeline.review.completed,
-                          active: primaryEvent.status === 'review',
-                        },
-                        {
-                          stage: 'Published & Merkle Anchored',
-                          desc: 'Final standings sealed into binary Merkle tree root. Loss autopsies released to participants.',
-                          status: 'published',
-                          date: primaryEvent.timeline.published.date,
-                          done: primaryEvent.timeline.published.completed,
-                          active: primaryEvent.status === 'published',
-                        },
-                      ].map((s, idx) => (
-                        <div
-                          key={idx}
-                          className={`p-4 rounded-xl border flex items-start gap-4 ${
-                            s.active
-                              ? 'bg-indigo-950/40 border-indigo-500/60 ring-1 ring-indigo-500/30'
-                              : s.done
-                              ? 'bg-slate-900/60 border-slate-800'
-                              : 'bg-slate-950/40 border-slate-800/60 opacity-60'
-                          }`}
-                        >
-                          <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
-                            {s.done ? (
-                              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                            ) : s.active ? (
-                              <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping" />
-                            ) : (
-                              idx + 1
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between">
-                              <h4 className="text-sm font-bold text-slate-100">{s.stage}</h4>
-                              <span className="text-xs font-mono text-slate-400">{s.date}</span>
+                      <div className="space-y-4">
+                        {[
+                          {
+                            stage: 'Draft Stage',
+                            desc: 'Rubrics, criteria, and tracks configured. Total rubric weights must equal exactly 100%.',
+                            status: 'draft',
+                            date: primaryEvent.timeline.draft.date,
+                            done: true,
+                          },
+                          {
+                            stage: 'Registration (Open)',
+                            desc: 'Teams register, pay direct-to-organizer via UPI, and receive verified join codes.',
+                            status: 'open',
+                            date: primaryEvent.timeline.open.date,
+                            done: primaryEvent.timeline.open.completed,
+                            active: primaryEvent.status === 'open',
+                          },
+                          {
+                            stage: 'Blind Judging Phase',
+                            desc: 'Judges evaluate anonymized projects. Individual scores sealed from admins. Rubrics frozen.',
+                            status: 'judging',
+                            date: primaryEvent.timeline.judging.date,
+                            done: primaryEvent.timeline.judging.completed,
+                            active: primaryEvent.status === 'scoring' || primaryEvent.status === 'judging',
+                          },
+                          {
+                            stage: 'Review & Fairness Audit',
+                            desc: 'Outlier detection, fatigue drift analysis, and winner-flip simulations unlocked.',
+                            status: 'review',
+                            date: primaryEvent.timeline.review.date,
+                            done: primaryEvent.timeline.review.completed,
+                            active: primaryEvent.status === 'review',
+                          },
+                          {
+                            stage: 'Published & Merkle Anchored',
+                            desc: 'Final standings sealed into binary Merkle tree root. Loss autopsies released to participants.',
+                            status: 'published',
+                            date: primaryEvent.timeline.published.date,
+                            done: primaryEvent.timeline.published.completed,
+                            active: primaryEvent.status === 'published',
+                          },
+                        ].map((s, idx) => (
+                          <div
+                            key={idx}
+                            className={`p-4 rounded-xl border flex items-start gap-4 ${
+                              s.active
+                                ? 'bg-indigo-950/40 border-indigo-500/60 ring-1 ring-indigo-500/30'
+                                : s.done
+                                ? 'bg-slate-900/60 border-slate-800'
+                                : 'bg-slate-950/40 border-slate-800/60 opacity-60'
+                            }`}
+                          >
+                            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                              {s.done ? (
+                                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                              ) : s.active ? (
+                                <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping" />
+                              ) : (
+                                idx + 1
+                              )}
                             </div>
-                            <p className="text-xs text-slate-400 mt-1">{s.desc}</p>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-bold text-slate-100">{s.stage}</h4>
+                                <span className="text-xs font-mono text-slate-400">{s.date}</span>
+                              </div>
+                              <p className="text-xs text-slate-400 mt-1">{s.desc}</p>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-12 text-center shadow-xl space-y-4">
+                    <div className="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mx-auto">
+                      <CalendarDays className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-100">No Competition Cycle Active</h3>
+                      <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                        There are currently no events registered for this institution. Initialize an event to govern its progression timeline.
+                      </p>
+                    </div>
+                    <Link
+                      href="/org"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-colors"
+                    >
+                      <span>Go to Organizer Console</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  </div>
+                )
               )}
 
               {/* VIEW 3: ORGANIZER VETTING */}
@@ -1105,43 +1147,64 @@ export default function AdminDashboardPage() {
               )}
 
               {/* VIEW 7: LEDGER */}
-              {currentView === 'ledger' && primaryEvent && (
-                <div className="space-y-6">
-                  <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                        <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                        <span>Cryptographic Ledger Status</span>
-                      </h3>
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                        Anchored SHA-256
-                      </span>
-                    </div>
-
-                    <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-                      <div className="flex items-center justify-between text-xs text-slate-400">
-                        <span>Merkle Root Hash</span>
-                        <button
-                          onClick={() => handleCopyMerkleRoot(primaryEvent.merkleRoot)}
-                          className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-semibold"
-                        >
-                          {copiedRoot ? 'Copied!' : 'Copy Hash'}
-                        </button>
+              {currentView === 'ledger' && (
+                primaryEvent ? (
+                  <div className="space-y-6">
+                    <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                          <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                          <span>Cryptographic Ledger Status</span>
+                        </h3>
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          Anchored SHA-256
+                        </span>
                       </div>
-                      <div className="font-mono text-xs text-slate-300 break-all bg-slate-900 p-2.5 rounded border border-slate-800">
-                        {primaryEvent.merkleRoot}
-                      </div>
-                    </div>
 
+                      <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between text-xs text-slate-400">
+                          <span>Merkle Root Hash</span>
+                          <button
+                            onClick={() => handleCopyMerkleRoot(primaryEvent.merkleRoot)}
+                            className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-semibold"
+                          >
+                            {copiedRoot ? 'Copied!' : 'Copy Hash'}
+                          </button>
+                        </div>
+                        <div className="font-mono text-xs text-slate-300 break-all bg-slate-900 p-2.5 rounded border border-slate-800">
+                          {primaryEvent.merkleRoot}
+                        </div>
+                      </div>
+
+                      <Link
+                        href="/verify"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold text-xs border border-slate-700"
+                      >
+                        <span>Open Full Public Verification Ledger</span>
+                        <ExternalLink className="w-4 h-4 text-slate-400" />
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-12 text-center shadow-xl space-y-4">
+                    <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
+                      <ShieldCheck className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-100">Ledger Awaiting Event Initialization</h3>
+                      <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                        Cryptographic ledger blocks and Merkle roots will automatically anchor once an event is created and scoring begins.
+                      </p>
+                    </div>
                     <Link
                       href="/verify"
-                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold text-xs border border-slate-700"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-colors"
                     >
-                      <span>Open Full Public Verification Ledger</span>
+                      <span>View Public Verification Ledger</span>
                       <ExternalLink className="w-4 h-4 text-slate-400" />
                     </Link>
                   </div>
-                </div>
+                )
               )}
 
               {/* VIEW 8: BILLING */}

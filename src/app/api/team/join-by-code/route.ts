@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
 import { getAuthUser } from '@/lib/auth/session'
-import { demoTeams } from '@/lib/demo-store'
 
 export async function POST(request: Request) {
   try {
@@ -24,37 +23,7 @@ export async function POST(request: Request) {
 
     const cleanCode = teamCode.trim().toUpperCase()
 
-    // 1. Check Demo Teams if demo mode
-    if ((user as any)?.isDemo) {
-      const targetDemoTeam = demoTeams.find(
-        (t) =>
-          t.team_code?.toUpperCase() === cleanCode ||
-          (t as any).join_code?.toUpperCase() === cleanCode
-      )
-
-      if (!targetDemoTeam) {
-        return NextResponse.json(
-          { error: 'Squad code not found. Please verify the code with your team lead.' },
-          { status: 404 }
-        )
-      }
-
-      // Check if already in squad
-      const alreadyMember = targetDemoTeam.members.some((m) => m.id === user.id)
-      if (!alreadyMember) {
-        targetDemoTeam.members.push({
-          id: user.id,
-          name: (user as any).user_metadata?.full_name || 'Participant Member',
-          email: user.email || 'member@nexis.edu',
-          role: 'member',
-          joined_at: new Date().toISOString(),
-        })
-      }
-
-      return NextResponse.json({ success: true, team: targetDemoTeam })
-    }
-
-    // 2. Query Supabase Teams
+    // Query Supabase Teams
     const serviceClient = getServiceSupabase()
 
     // Search across teams matching team_code or join_code

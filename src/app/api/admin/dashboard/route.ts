@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
 import { requireInstitutionAdmin } from '@/lib/auth/guards'
-import { DEMO_EVENTS, demoTeams } from '@/lib/demo-store'
 
 export async function GET() {
   try {
@@ -11,111 +10,6 @@ export async function GET() {
 
     const { user, profile } = auth.caller
     const institutionId = profile.institution_id
-
-    // Fallback for demo accounts in development
-    if ((user as any)?.isJury === undefined && (user as any)?.email === 'admin@nexis.edu') {
-      const activeEvent = DEMO_EVENTS[0]
-      const totalTeams = demoTeams.length
-      const verifiedTeams = demoTeams.filter((t) => t.payment_status === 'verified').length
-      const pendingApprovals = demoTeams.filter((t) => t.payment_status === 'pending_verification').length
-      const totalCollected = verifiedTeams * 500
-
-      return NextResponse.json({
-        success: true,
-        institution: {
-          id: institutionId || 'a0000000-0000-0000-0000-000000000001',
-          name: 'Nexis Institute of Technology',
-        },
-        events: [
-          {
-            id: activeEvent.id,
-            title: activeEvent.title,
-            status: activeEvent.status, // 'scoring'
-            timeline: {
-              draft: { date: '2026-09-15', completed: true },
-              open: { date: '2026-09-20', completed: true },
-              judging: { date: '2026-10-01', completed: true, active: true },
-              review: { date: '2026-10-04', completed: false },
-              published: { date: '2026-10-05', completed: false },
-            },
-            merkleRoot: '0758c7ab83107ed07118d9f2bb19f730bdf0a8c52b6303548af8aae91e927f58',
-            chainVerified: true,
-            totalBlocks: 103,
-          },
-        ],
-        registrations: {
-          totalTeams,
-          totalParticipants: totalTeams * 4,
-          pendingApprovals,
-          trackBreakdown: [
-            { track: 'FinTech & Web3', teams: 2 },
-            { track: 'AI & Healthcare', teams: 2 },
-            { track: 'ClimateTech', teams: 1 },
-          ],
-        },
-        judgesProgress: [
-          {
-            id: 'j-1',
-            name: 'Dr. Evelyn Vance',
-            email: 'evelyn@nexis.edu',
-            assignedCount: 4,
-            scoredCount: 4,
-            completionPct: 100,
-          },
-          {
-            id: 'j-2',
-            name: 'Marcus Sterling',
-            email: 'marcus@nexis.edu',
-            assignedCount: 4,
-            scoredCount: 3,
-            completionPct: 75,
-          },
-          {
-            id: 'j-3',
-            name: 'Prof. Aris Thorne',
-            email: 'aris@nexis.edu',
-            assignedCount: 4,
-            scoredCount: 2,
-            completionPct: 50,
-          },
-        ],
-        approvalsQueue: {
-          pendingOrganizers: [
-            {
-              id: 'org-sample-1',
-              fullName: 'Aarav Patel',
-              email: 'aarav.p@nexis.edu',
-              appliedAt: '2026-10-01T14:20:00Z',
-            },
-          ],
-          editRequests: [
-            {
-              id: 'edit-sample-1',
-              judgeName: 'Marcus Sterling',
-              teamName: 'TerraPulse',
-              reason: 'Factual rubric re-calibration after inspecting github commit log',
-              createdAt: '2026-10-02T10:15:00Z',
-            },
-          ],
-          reviewRequests: [
-            {
-              id: 'ticket-sample-1',
-              teamName: 'NeuralPulse',
-              reason: 'Requesting review of technical architecture criterion weight',
-              status: 'open',
-              createdAt: '2026-10-02T11:45:00Z',
-            },
-          ],
-        },
-        billingSummary: {
-          totalCollected,
-          currency: 'INR',
-          verifiedCount: verifiedTeams,
-          pendingCount: pendingApprovals,
-          feePerTeam: 500,
-        },
-      })
-    }
 
     const serviceClient = getServiceSupabase()
 
@@ -261,9 +155,9 @@ export async function GET() {
           review: { date: '2026-10-04', completed: ['review', 'published'].includes(st), active: st === 'review' },
           published: { date: '2026-10-05', completed: st === 'published', active: st === 'published' },
         },
-        merkleRoot: evt.merkle_root || '0758c7ab83107ed07118d9f2bb19f730bdf0a8c52b6303548af8aae91e927f58',
-        chainVerified: true,
-        totalBlocks: 103,
+        merkleRoot: evt.anchored_merkle_root || evt.merkle_root || null,
+        chainVerified: Boolean(evt.anchored_merkle_root || evt.merkle_root),
+        totalBlocks: evt.block_count || 0,
       }
     })
 
