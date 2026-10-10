@@ -47,10 +47,13 @@ function AuthForm() {
 
   const redirectTo = searchParams.get('redirectTo') || ''
   const initialToken = searchParams.get('token') || searchParams.get('activationToken') || ''
+  const isResetMode = searchParams.get('mode') === 'reset'
 
   // Form states
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [updatingPassword, setUpdatingPassword] = useState(false)
   const [fullName, setFullName] = useState('')
   const [inviteToken, setInviteToken] = useState(initialToken)
   const [selectedInstitutionId, setSelectedInstitutionId] = useState('')
@@ -62,6 +65,9 @@ function AuthForm() {
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [magicLinkSent, setMagicLinkSent] = useState(false)
+  const [otpCode, setOtpCode] = useState('')
+  const [verifyingOtp, setVerifyingOtp] = useState(false)
+  const [resendingOtp, setResendingOtp] = useState(false)
   const [organizerPending, setOrganizerPending] = useState(false)
 
   // Forgot password modal
@@ -142,18 +148,18 @@ function AuthForm() {
     setError(null)
 
     try {
-      if (currentRole === 'jury' && authMethod === 'magic') {
-        // Real Magic Link with signInWithOtp
-        const supabase = createClient()
-        const { error: otpErr } = await supabase.auth.signInWithOtp({
-          email,
-          options: {
-            emailRedirectTo: `${window.location.origin}/api/auth/callback?redirectTo=${encodeURIComponent(
-              redirectTo || '/jury'
-            )}`,
-          },
+      if (authMethod === 'magic' && currentRole !== 'admin') {
+        const res = await fetch('/api/auth/otp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            accountType: currentRole,
+            redirectTo,
+          }),
         })
-        if (otpErr) throw otpErr
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Failed to dispatch email authentication')
         setMagicLinkSent(true)
         setLoading(false)
         return
@@ -228,6 +234,68 @@ function AuthForm() {
       setError(err.message || 'Authentication failed')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Handle 6-digit OTP verification
+  async function handleVerifyOtp(e: React.FormEvent) {
+    e.preventDefault()
+    if (!otpCode || otpCode.trim().length < 6) {
+      setError('Please enter the 6-digit verification code sent to your email.')
+      return
+    }
+
+    setVerifyingOtp(true)
+    setError(null)
+
+    try {
+      const res = await fetch('/api/auth/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          token: otpCode.trim(),
+          accountType: currentRole,
+          redirectTo,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Invalid or expired verification code')
+
+      setSuccessMessage('Code verified! Entering workspace...')
+      setTimeout(() => {
+        router.push(data.targetDest || roleConfig.defaultDest)
+        router.refresh()
+      }, 900)
+    } catch (err: any) {
+      setError(err.message || 'OTP verification failed')
+    } finally {
+      setVerifyingOtp(false)
+    }
+  }
+
+  // Resend OTP code
+  async function handleResendOtp() {
+    setResendingOtp(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/auth/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          accountType: currentRole,
+          redirectTo,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to resend code')
+      setSuccessMessage('A fresh verification code and login link have been dispatched to your email.')
+    } catch (err: any) {
+      setError(err.message || 'Could not resend code')
+    } finally {
+      setResendingOtp(false)
     }
   }
 
@@ -329,6 +397,13 @@ function AuthForm() {
         return
       }
 
+      if (data.emailConfirmationRequired) {
+        setSuccessMessage(
+          'Account created! A confirmation email has been dispatched. Please verify your address from your inbox to sign in.'
+        )
+        return
+      }
+
       setSuccessMessage('Account created successfully! Signing you in...')
       setTimeout(() => {
         router.push(roleConfig.defaultDest)
@@ -347,16 +422,48 @@ function AuthForm() {
     setForgotLoading(true)
     setError(null)
     try {
-      const supabase = createClient()
-      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
-        redirectTo: `${window.location.origin}/auth?role=${currentRole}&tab=signin&mode=reset`,
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail }),
       })
-      if (resetErr) throw resetErr
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to dispatch password reset email')
       setForgotSuccess(true)
     } catch (err: any) {
       setError(err.message || 'Failed to send password reset email')
     } finally {
       setForgotLoading(false)
+    }
+  }
+
+  // Handle setting a new password in reset mode
+  async function handleUpdatePassword(e: React.FormEvent) {
+    e.preventDefault()
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
+    }
+    setUpdatingPassword(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to update password')
+
+      setSuccessMessage('Password successfully updated! Redirecting to workspace...')
+      setTimeout(() => {
+        router.push(roleConfig.defaultDest)
+        router.refresh()
+      }, 1000)
+    } catch (err: any) {
+      setError(err.message || 'Password update failed')
+    } finally {
+      setUpdatingPassword(false)
     }
   }
 
@@ -447,6 +554,59 @@ function AuthForm() {
                 </Link>
               </div>
             </div>
+          ) : isResetMode ? (
+            <div className="py-2 space-y-4">
+              <div className="text-center space-y-1">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto mb-2">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-bold text-white">Create New Password</h3>
+                <p className="text-xs text-slate-400">
+                  Enter a strong new password for your FairPitch account
+                </p>
+              </div>
+
+              <form onSubmit={handleUpdatePassword} className="space-y-4">
+                <div>
+                  <label htmlFor="new-password" className="block text-xs font-medium text-slate-300 mb-1">
+                    New Password
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Lock className="h-4 w-4 text-slate-500" />
+                    </div>
+                    <input
+                      id="new-password"
+                      type="password"
+                      required
+                      minLength={8}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Minimum 8 characters"
+                      className="block w-full pl-9 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={updatingPassword}
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {updatingPassword ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Updating Password...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Update Password & Enter Workspace</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
           ) : (
             <>
               {/* Tab Selector (Sign In vs Create Account) */}
@@ -515,8 +675,8 @@ function AuthForm() {
                     </>
                   )}
 
-                  {/* Jury Passwordless option */}
-                  {currentRole === 'jury' && (
+                  {/* Password vs Magic Link / Code Toggle (Available for all roles except admin) */}
+                  {currentRole !== 'admin' && (
                     <div className="flex rounded-lg bg-slate-950 p-1 border border-slate-800">
                       <button
                         type="button"
@@ -544,26 +704,83 @@ function AuthForm() {
                             : 'text-slate-400 hover:text-slate-200'
                         }`}
                       >
-                        Magic Link (Email)
+                        Magic Link / Email Code
                       </button>
                     </div>
                   )}
 
                   {magicLinkSent ? (
-                    <div className="p-5 rounded-xl bg-violet-950/30 border border-violet-800/50 text-center space-y-3">
-                      <Sparkles className="w-8 h-8 text-violet-400 mx-auto" />
-                      <h4 className="text-sm font-semibold text-violet-300">Magic Link Sent</h4>
-                      <p className="text-xs text-slate-300">
-                        We sent a secure, one-click sign-in link to{' '}
-                        <strong className="text-white">{email}</strong>. Please check your inbox.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setMagicLinkSent(false)}
-                        className="text-xs text-violet-400 hover:text-violet-300 underline font-medium cursor-pointer"
-                      >
-                        Sign in with another email or password
-                      </button>
+                    <div className="p-5 rounded-xl bg-violet-950/30 border border-violet-800/50 text-center space-y-4">
+                      <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 flex items-center justify-center mx-auto">
+                        <Sparkles className="w-5 h-5" />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-sm font-semibold text-violet-300">Authentication Link & Code Sent</h4>
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          We dispatched a one-click magic link and a 6-digit verification code to{' '}
+                          <strong className="text-white">{email}</strong>.
+                        </p>
+                      </div>
+
+                      {/* Interactive 6-digit OTP entry */}
+                      <form onSubmit={handleVerifyOtp} className="pt-2 space-y-3">
+                        <div>
+                          <label htmlFor="otp-input" className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                            Enter 6-Digit Code
+                          </label>
+                          <input
+                            id="otp-input"
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            maxLength={6}
+                            required
+                            value={otpCode}
+                            onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+                            placeholder="••••••"
+                            className="block w-full py-2.5 px-3 bg-slate-950 border border-slate-700 rounded-xl text-center text-lg font-mono tracking-[0.5em] text-violet-300 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={verifyingOtp || otpCode.length < 6}
+                          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-semibold text-white bg-violet-600 hover:bg-violet-500 shadow-md shadow-violet-600/30 transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          {verifyingOtp ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Verifying Code...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Verify Code & Enter</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </>
+                          )}
+                        </button>
+                      </form>
+
+                      <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
+                        <button
+                          type="button"
+                          onClick={handleResendOtp}
+                          disabled={resendingOtp}
+                          className="text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                          {resendingOtp ? 'Resending...' : 'Resend code'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMagicLinkSent(false)
+                            setOtpCode('')
+                          }}
+                          className="text-violet-400 hover:text-violet-300 underline font-medium cursor-pointer"
+                        >
+                          Use password instead
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <form onSubmit={handleSignIn} className="space-y-4">
@@ -631,9 +848,9 @@ function AuthForm() {
                             <Loader2 className="w-4 h-4 animate-spin" />
                             <span>Signing in...</span>
                           </>
-                        ) : authMethod === 'magic' && currentRole === 'jury' ? (
+                        ) : authMethod === 'magic' ? (
                           <>
-                            <span>Send Magic Link</span>
+                            <span>Send Magic Link & Code</span>
                             <Sparkles className="w-4 h-4" />
                           </>
                         ) : (

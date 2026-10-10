@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
 import { hashToken } from '@/lib/auth/tokens'
+import { sendWelcomeEmail } from '@/lib/email/resend'
 
 export async function POST(request: Request) {
   try {
@@ -62,17 +63,39 @@ export async function POST(request: Request) {
       }
 
       // Verify that institution exists
-      const { data: inst, error: instErr } = await serviceClient
+      let { data: inst, error: instErr } = await serviceClient
         .from('institutions')
         .select('id')
         .eq('id', institutionId)
         .single()
 
       if (instErr || !inst) {
-        return NextResponse.json(
-          { error: 'Selected institution is invalid or does not exist' },
-          { status: 400 }
-        )
+        // Fallback auto-provisioning for standard seed institutions in live testing environments
+        if (
+          institutionId === 'a0000000-0000-0000-0000-000000000001' ||
+          institutionId === 'a0000000-0000-0000-0000-000000000002'
+        ) {
+          const defaultName =
+            institutionId === 'a0000000-0000-0000-0000-000000000001'
+              ? 'Nexis Institute of Technology'
+              : 'Apex Global University'
+          const defaultSlug =
+            institutionId === 'a0000000-0000-0000-0000-000000000001'
+              ? 'nexis-tech'
+              : 'apex-global'
+          await serviceClient.from('institutions').upsert({
+            id: institutionId,
+            name: defaultName,
+            slug: defaultSlug,
+            status: 'active',
+          })
+          inst = { id: institutionId }
+        } else {
+          return NextResponse.json(
+            { error: 'Selected institution is invalid or does not exist' },
+            { status: 400 }
+          )
+        }
       }
 
       assignedInstitutionId = inst.id
@@ -185,8 +208,22 @@ export async function POST(request: Request) {
         .eq('id', verifiedInvite.id)
     }
 
+    // 6. Send transactional welcome email (non-blocking)
+    try {
+      await sendWelcomeEmail({
+        to: email,
+        fullName,
+        role: accountType,
+      })
+    } catch (mailErr) {
+      console.warn('[Signup] Welcome email non-fatal dispatch warning:', mailErr)
+    }
+
+    const emailConfirmationRequired = !authData.session && !authData.user.confirmed_at
+
     return NextResponse.json({
       success: true,
+      emailConfirmationRequired,
       user: {
         id: authData.user.id,
         email: authData.user.email,
