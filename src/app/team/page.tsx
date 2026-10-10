@@ -28,6 +28,8 @@ import {
   ArrowLeft,
   Share2,
   ExternalLink,
+  Ticket,
+  MessageCircle,
 } from 'lucide-react'
 import { generateDynamicUpiQr, generateTransactionRef } from '@/lib/payments/upi'
 
@@ -41,7 +43,7 @@ type ParticipantNavView =
   | 'switch'
   | 'consent'
 
-type OnboardingStep = 'select' | 'create' | 'join' | 'payment' | 'ready'
+type OnboardingStep = 'select' | 'event_code' | 'create' | 'join' | 'payment' | 'ready'
 
 export default function TeamWorkspacePage() {
   const router = useRouter()
@@ -56,6 +58,12 @@ export default function TeamWorkspacePage() {
   // Dedicated Onboarding State (when !team)
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>('select')
   const [createdTeam, setCreatedTeam] = useState<any | null>(null)
+
+  // Flyer Event Code State
+  const [eventCodeInput, setEventCodeInput] = useState('')
+  const [verifiedEvent, setVerifiedEvent] = useState<any | null>(null)
+  const [verifyingEvent, setVerifyingEvent] = useState(false)
+  const [eventVerifyError, setEventVerifyError] = useState<string | null>(null)
 
   // Creation form state
   const [name, setName] = useState('')
@@ -106,9 +114,10 @@ export default function TeamWorkspacePage() {
       const evRes = await fetch('/api/events')
       if (evRes.ok) {
         const evData = await evRes.json()
-        setAvailableEvents(evData.events || [])
-        if (evData.events?.length > 0 && !eventId) {
-          setEventId(evData.events[0].id)
+        const evList = evData.events || []
+        setAvailableEvents(evList)
+        if (evList.length > 0 && !eventId) {
+          setEventId(evList[0].id)
         }
       }
     } finally {
@@ -116,16 +125,56 @@ export default function TeamWorkspacePage() {
     }
   }
 
+  async function handleVerifyEventCode(codeToVerify?: string) {
+    const code = (codeToVerify || eventCodeInput).trim().toUpperCase()
+    if (!code) {
+      setEventVerifyError('Please enter an event code from your flyer')
+      return
+    }
+
+    setVerifyingEvent(true)
+    setEventVerifyError(null)
+
+    try {
+      const res = await fetch(`/api/events/verify-code?code=${encodeURIComponent(code)}`)
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Event not found')
+      }
+
+      setVerifiedEvent(data.event)
+      setEventId(data.event.id)
+      if (data.event.tracks?.length > 0 && !track) {
+        setTrack(data.event.tracks[0])
+      }
+      setOnboardingStep('create')
+    } catch (err: any) {
+      setEventVerifyError(err.message || 'Failed to verify event code')
+    } finally {
+      setVerifyingEvent(false)
+    }
+  }
+
   useEffect(() => {
     fetchMyTeam()
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const evParam = params.get('event')
+      if (evParam) {
+        const clean = evParam.toUpperCase()
+        setEventCodeInput(clean)
+        handleVerifyEventCode(clean)
+      }
+    }
   }, [])
 
-  const selectedEvent = availableEvents.find((e) => e.id === eventId) || availableEvents[0]
-  const selectedEventFee = Number(selectedEvent?.registration_fee) || 0
+  const selectedEvent = verifiedEvent || availableEvents.find((e) => e.id === eventId) || availableEvents[0]
+  const selectedEventFee = Number(selectedEvent?.registrationFee ?? selectedEvent?.registration_fee) || 0
 
   async function handleCreateTeam(e: React.FormEvent) {
     e.preventDefault()
-    const targetEventId = eventId || availableEvents[0]?.id || 'e0000000-0000-0000-0000-000000000001'
+    const targetEventId = verifiedEvent?.id || eventId || availableEvents[0]?.id || 'e0000000-0000-0000-0000-000000000001'
 
     setActionLoading(true)
     setError(null)
@@ -165,17 +214,14 @@ export default function TeamWorkspacePage() {
 
   async function handleJoinTeam(e: React.FormEvent) {
     e.preventDefault()
-    const targetEventId = eventId || availableEvents[0]?.id || 'e0000000-0000-0000-0000-000000000001'
-
     setActionLoading(true)
     setError(null)
 
     try {
-      const res = await fetch(`/api/events/${targetEventId}/teams`, {
+      const res = await fetch('/api/team/join-by-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'join',
           teamCode: joinCode.trim().toUpperCase(),
         }),
       })
@@ -461,7 +507,11 @@ export default function TeamWorkspacePage() {
                   <div
                     onClick={() => {
                       setError(null)
-                      setOnboardingStep('create')
+                      if (verifiedEvent) {
+                        setOnboardingStep('create')
+                      } else {
+                        setOnboardingStep('event_code')
+                      }
                     }}
                     className="p-5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-blue-500/60 transition-all cursor-pointer group flex flex-col justify-between space-y-4 hover:shadow-xl hover:shadow-blue-500/10"
                   >
@@ -479,7 +529,7 @@ export default function TeamWorkspacePage() {
                           Create a Team
                         </h3>
                         <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                          Register a new squad, choose your track, and generate an invite code for your teammates.
+                          Enter your flyer Event Code, form your squad, pay via UPI, and generate your team invite code.
                         </p>
                       </div>
                     </div>
@@ -511,16 +561,124 @@ export default function TeamWorkspacePage() {
                           Join with Code
                         </h3>
                         <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                          Have a join code from your team leader? Enter it to instantly join their squad roster.
+                          Have a Squad Code from your team captain? Enter it to instantly join their roster with no fee.
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center text-xs font-semibold text-violet-400 gap-1.5 pt-2">
-                      <span>Enter Code</span>
+                      <span>Enter Squad Code</span>
                       <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* STEP 1.5: ENTER EVENT CODE FROM FLYER */}
+            {onboardingStep === 'event_code' && (
+              <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl space-y-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEventVerifyError(null)
+                    setOnboardingStep('select')
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back to options</span>
+                </button>
+
+                <div className="space-y-1">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30 text-[10px] font-bold uppercase tracking-wider mb-2">
+                    <Ticket className="w-3.5 h-3.5" />
+                    <span>Flyer Event Verification</span>
+                  </div>
+                  <h2 className="text-xl font-bold text-white">Enter Hackathon Event Code</h2>
+                  <p className="text-xs text-slate-400">
+                    Enter the code printed on your event poster, flyer, or announcement (e.g. <code className="text-blue-400 font-bold">HACK-2026</code>)
+                  </p>
+                </div>
+
+                {eventVerifyError && (
+                  <div className="p-3.5 rounded-xl bg-red-950/40 border border-red-800/60 text-xs text-red-300 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                    <span>{eventVerifyError}</span>
+                  </div>
+                )}
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    handleVerifyEventCode()
+                  }}
+                  className="space-y-4"
+                >
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Flyer Event Code *
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                        <Ticket className="h-4 w-4 text-slate-500" />
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        value={eventCodeInput}
+                        onChange={(e) => setEventCodeInput(e.target.value.toUpperCase())}
+                        placeholder="e.g. HACK-2026"
+                        className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm font-mono font-bold tracking-widest text-blue-300 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 uppercase"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={verifyingEvent || !eventCodeInput.trim()}
+                    className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all shadow-md shadow-blue-600/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {verifyingEvent ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Verifying Hackathon Event...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Verify &amp; Continue to Squad Details</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+
+                  {/* Active Events Quick Chips */}
+                  {availableEvents.length > 0 && (
+                    <div className="pt-3 border-t border-slate-800/80 space-y-2">
+                      <span className="text-[11px] text-slate-400 font-medium">Or select an active hackathon:</span>
+                      <div className="flex flex-wrap gap-2">
+                        {availableEvents.map((ev) => {
+                          const code = ev.event_code || ev.slug?.toUpperCase() || 'HACK-2026'
+                          return (
+                            <button
+                              key={ev.id}
+                              type="button"
+                              onClick={() => {
+                                setEventCodeInput(code)
+                                handleVerifyEventCode(code)
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-blue-500/40 text-xs text-slate-300 transition-colors flex items-center gap-1.5 cursor-pointer text-left"
+                            >
+                              <span className="font-semibold text-white">{ev.title}</span>
+                              <span className="text-[10px] font-mono text-blue-400 font-bold bg-blue-950/60 px-1.5 py-0.5 rounded border border-blue-800/40">
+                                {code}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </form>
               </div>
             )}
 
@@ -540,16 +698,20 @@ export default function TeamWorkspacePage() {
                 </button>
 
                 <div className="space-y-1">
-                  <h2 className="text-xl font-bold text-white">Enter Team Join Code</h2>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/30 text-[10px] font-bold uppercase tracking-wider mb-2">
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>Teammate Quick Join</span>
+                  </div>
+                  <h2 className="text-xl font-bold text-white">Enter Squad Join Code</h2>
                   <p className="text-xs text-slate-400">
-                    Paste the 6-character code provided by your team lead (e.g., <code className="text-violet-400">TEAM-A7K2</code>)
+                    Paste the 6-character squad code provided by your team captain (e.g. <code className="text-violet-400 font-bold">TEAM-A7K2</code>).
                   </p>
                 </div>
 
                 <form onSubmit={handleJoinTeam} className="space-y-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                      Team Join Code *
+                      Squad Code *
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -568,7 +730,7 @@ export default function TeamWorkspacePage() {
 
                   <button
                     type="submit"
-                    disabled={actionLoading || !joinCode}
+                    disabled={actionLoading || !joinCode.trim()}
                     className="w-full py-3 px-4 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs transition-all shadow-md shadow-violet-600/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     {actionLoading ? (
@@ -594,42 +756,52 @@ export default function TeamWorkspacePage() {
                   type="button"
                   onClick={() => {
                     setError(null)
-                    setOnboardingStep('select')
+                    setOnboardingStep('event_code')
                   }}
                   className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Back to options</span>
+                  <span>Change Event Code</span>
                 </button>
 
+                {/* Verified Event Badge */}
+                <div className="p-4 rounded-2xl bg-blue-950/30 border border-blue-800/60 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold">
+                      <CheckCircle2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-white">{selectedEvent?.title}</span>
+                        <span className="text-[10px] font-mono font-bold text-blue-400 bg-blue-900/50 px-2 py-0.5 rounded border border-blue-700/60">
+                          {selectedEvent?.eventCode || selectedEvent?.event_code || 'HACK-2026'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {selectedEvent?.institutionName || (selectedEvent?.institutions as any)?.name || 'FairPitch Partner'} &middot;{' '}
+                        <strong className="text-emerald-400">
+                          {selectedEventFee > 0 ? `₹${selectedEventFee} Registration Fee` : 'Free Event'}
+                        </strong>
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setOnboardingStep('event_code')}
+                    className="text-xs font-semibold text-blue-400 hover:text-blue-300 underline cursor-pointer"
+                  >
+                    Change
+                  </button>
+                </div>
+
                 <div className="space-y-1">
-                  <h2 className="text-xl font-bold text-white">Create a New Squad</h2>
+                  <h2 className="text-xl font-bold text-white">Create Your Project Squad</h2>
                   <p className="text-xs text-slate-400">
-                    Step 1 of 2 &middot; Form your project team and define your competition track
+                    Form your team, select your competition track, and proceed to event activation.
                   </p>
                 </div>
 
                 <form onSubmit={handleCreateTeam} className="space-y-4">
-                  {/* Event Selector (if available) */}
-                  {availableEvents.length > 0 && (
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">
-                        Competition Event
-                      </label>
-                      <select
-                        value={eventId}
-                        onChange={(e) => setEventId(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                      >
-                        {availableEvents.map((ev) => (
-                          <option key={ev.id} value={ev.id}>
-                            {ev.title} {Number(ev.registration_fee) > 0 ? `(₹${ev.registration_fee} Reg Fee)` : '(Free Event)'}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
                   <div>
                     <label className="block text-xs font-semibold text-slate-300 mb-1">
                       Team / Project Name *
@@ -658,14 +830,33 @@ export default function TeamWorkspacePage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
                       Competition Track
                     </label>
+                    {/* Suggested track chips */}
+                    {selectedEvent?.tracks && selectedEvent.tracks.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {selectedEvent.tracks.map((t: string) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setTrack(t)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer border ${
+                              track === t
+                                ? 'bg-blue-600 text-white border-blue-500 font-semibold'
+                                : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
+                            }`}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <input
                       type="text"
                       value={track}
                       onChange={(e) => setTrack(e.target.value)}
-                      placeholder="e.g. Healthcare & AI / Open Innovation"
+                      placeholder="Choose track above or enter custom track"
                       className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                     />
                   </div>
@@ -828,8 +1019,20 @@ export default function TeamWorkspacePage() {
                       </button>
                     </div>
 
+                    <div className="pt-1">
+                      <a
+                        href={`https://wa.me/?text=${encodeURIComponent(`Join our hackathon squad "${createdTeam?.name || name}" on FairPitch! Team Join Code: ${createdTeam?.team_code || createdTeam?.join_code}\nRegister at https://fair-pitch.vercel.app/team`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full py-2.5 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        <span>Share Invite Code on WhatsApp</span>
+                      </a>
+                    </div>
+
                     <p className="text-xs text-slate-400 leading-relaxed">
-                      Share this code with up to 4 teammates. When they log in and select <strong>&quot;Join with Code&quot;</strong>, they will instantly be added to your roster without paying fees again.
+                      Share this code with your teammates. When they log in and select <strong>&quot;Join with Code&quot;</strong>, they will instantly be added to your roster without paying fees again.
                     </p>
                   </div>
                 )}

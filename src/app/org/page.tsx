@@ -78,6 +78,7 @@ export default function OrganizerWorkspacePage() {
   // Creation form state
   const [newEventTitle, setNewEventTitle] = useState('')
   const [newEventDesc, setNewEventDesc] = useState('')
+  const [newEventCode, setNewEventCode] = useState('HACK-2026')
   const [newEventDate, setNewEventDate] = useState('')
   const [newRegFee, setNewRegFee] = useState('500')
   const [newUpiVpa, setNewUpiVpa] = useState('nexis@okhdfcbank')
@@ -222,6 +223,7 @@ export default function OrganizerWorkspacePage() {
         body: JSON.stringify({
           title: newEventTitle,
           description: newEventDesc,
+          event_code: newEventCode.trim().toUpperCase(),
           start_date: newEventDate || new Date().toISOString(),
           registration_fee: Number(newRegFee) || 0,
           upi_id: newUpiVpa,
@@ -777,6 +779,28 @@ export default function OrganizerWorkspacePage() {
                           <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
                             {evt.description || 'No description provided.'}
                           </p>
+
+                          {/* Flyer Event Code & Quick Registration Link */}
+                          <div className="mt-4 p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                            <div>
+                              <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold block">Flyer Event Code</span>
+                              <span className="text-xs font-mono font-bold text-emerald-400">
+                                {(evt as any).event_code || evt.slug?.toUpperCase() || 'HACK-2026'}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const code = (evt as any).event_code || evt.slug?.toUpperCase() || 'HACK-2026'
+                                navigator.clipboard.writeText(`${window.location.origin}/team?event=${code}`)
+                                showToast(`Copied flyer link: ${window.location.origin}/team?event=${code}`)
+                              }}
+                              className="px-2.5 py-1 text-[10px] font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30 transition-colors flex items-center gap-1 cursor-pointer"
+                            >
+                              <Copy className="w-3 h-3" />
+                              <span>Flyer Link</span>
+                            </button>
+                          </div>
                         </div>
 
                         <div className="mt-5 pt-4 border-t border-slate-800 flex items-center justify-between text-xs">
@@ -803,21 +827,36 @@ export default function OrganizerWorkspacePage() {
                   <div>
                     <h3 className="text-base font-bold text-slate-100">Create New Competition</h3>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Configure your hackathon, dynamic UPI recipient details, and blind judging policy.
+                      Configure your hackathon, dynamic UPI recipient details, and flyer distribution code.
                     </p>
                   </div>
 
                   <form onSubmit={handleCreateEvent} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">Event Title *</label>
-                      <input
-                        type="text"
-                        required
-                        value={newEventTitle}
-                        onChange={(e) => setNewEventTitle(e.target.value)}
-                        placeholder="e.g. HackNexis Global Finale 2026"
-                        className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                      />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Event Title *</label>
+                        <input
+                          type="text"
+                          required
+                          value={newEventTitle}
+                          onChange={(e) => setNewEventTitle(e.target.value)}
+                          placeholder="e.g. HackNexis Global Finale 2026"
+                          className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">
+                          Flyer Event Code * (Printed on Posters)
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={newEventCode}
+                          onChange={(e) => setNewEventCode(e.target.value.toUpperCase())}
+                          placeholder="e.g. HACK-2026"
+                          className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono font-bold text-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 uppercase"
+                        />
+                      </div>
                     </div>
 
                     <div>

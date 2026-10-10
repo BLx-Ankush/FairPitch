@@ -25,6 +25,7 @@ export const DEMO_EVENTS = [
     institution_id: 'a0000000-0000-0000-0000-000000000001',
     title: 'HackNexis 2026',
     slug: 'hacknexis-2026',
+    event_code: 'HACK-2026',
     description: 'Annual Inter-Collegiate Engineering Hackathon',
     status: 'registration',
     registration_fee: 500,
@@ -33,6 +34,8 @@ export const DEMO_EVENTS = [
     institutions: { name: 'Nexis Institute of Technology' },
     events: {
       title: 'HackNexis 2026',
+      slug: 'hacknexis-2026',
+      event_code: 'HACK-2026',
       status: 'registration',
       registration_fee: 500,
       upi_id: 'hacknexis@upi',

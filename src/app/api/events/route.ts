@@ -111,26 +111,60 @@ export async function POST(request: Request) {
       .replace(/^-|-$/g, '')
     const slug = `${baseSlug}-${Math.floor(1000 + Math.random() * 9000)}`
 
+    const rawCode = body.event_code || body.eventCode
+    const generatedEventCode = (
+      rawCode ||
+      `${title.substring(0, 4).toUpperCase().replace(/[^A-Z0-9]/g, 'EV')}-${Math.floor(1000 + Math.random() * 9000)}`
+    )
+      .toUpperCase()
+      .trim()
+
+    const regFee = Number(body.registration_fee ?? body.registrationFee) || 0
+    const upiIdVal = body.upi_id || body.upiId || null
+    const upiNameVal = body.upi_name || body.upiName || null
+    const startDateVal = body.startDate || body.start_date || new Date().toISOString()
+    const endDateVal = body.endDate || body.end_date || new Date(Date.now() + 7 * 86400000).toISOString()
+
     const serviceClient = getServiceSupabase()
-    const { data: event, error: createErr } = await serviceClient
+
+    // Build insert payload with event_code and UPI fields
+    const insertPayload: any = {
+      institution_id: institutionId,
+      title,
+      slug,
+      event_code: generatedEventCode,
+      description: description || null,
+      start_date: new Date(startDateVal).toISOString(),
+      end_date: new Date(endDateVal).toISOString(),
+      registration_deadline: registrationDeadline ? new Date(registrationDeadline).toISOString() : null,
+      submission_deadline: submissionDeadline ? new Date(submissionDeadline).toISOString() : null,
+      status: 'open',
+      blind_mode: Boolean(blindMode),
+      min_judges_per_team: Number(minJudgesPerTeam) || 3,
+      judging_mode: judgingMode,
+      registration_fee: regFee,
+      upi_id: upiIdVal,
+      upi_name: upiNameVal,
+      created_by: user.id,
+    }
+
+    let { data: event, error: createErr } = await serviceClient
       .from('events')
-      .insert({
-        institution_id: institutionId,
-        title,
-        slug,
-        description: description || null,
-        start_date: new Date(startDate).toISOString(),
-        end_date: new Date(endDate).toISOString(),
-        registration_deadline: registrationDeadline ? new Date(registrationDeadline).toISOString() : null,
-        submission_deadline: submissionDeadline ? new Date(submissionDeadline).toISOString() : null,
-        status: 'draft', // initial state
-        blind_mode: Boolean(blindMode),
-        min_judges_per_team: Number(minJudgesPerTeam) || 3,
-        judging_mode: judgingMode,
-        created_by: user.id,
-      })
+      .insert(insertPayload)
       .select()
       .single()
+
+    // Fallback if event_code column does not yet exist in remote database schema
+    if (createErr && createErr.message?.includes('event_code')) {
+      delete insertPayload.event_code
+      const retryRes = await serviceClient
+        .from('events')
+        .insert(insertPayload)
+        .select()
+        .single()
+      event = retryRes.data
+      createErr = retryRes.error
+    }
 
     if (createErr) {
       return NextResponse.json({ error: createErr.message }, { status: 400 })
