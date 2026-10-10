@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
 import { calculateLeaderboard } from '@/lib/fairness/engine'
+import { memoryCache, publicCacheHeaders } from '@/lib/cache/memory-cache'
 
 export async function GET(
   request: Request,
@@ -8,7 +9,17 @@ export async function GET(
 ) {
   try {
     const { id: eventId } = await params
+    const cacheKey = `event:results:${eventId}`
+
+    const cachedResults = memoryCache.get<any>(cacheKey)
+    if (cachedResults) {
+      return NextResponse.json(cachedResults, {
+        headers: publicCacheHeaders(300, 600),
+      })
+    }
+
     const serviceClient = getServiceSupabase()
+
 
     // 1. Fetch event metadata
     const { data: event, error: eventErr } = await serviceClient
@@ -68,12 +79,18 @@ export async function GET(
     // Calculate official leaderboard
     const leaderboard = calculateLeaderboard(scores, teams, [], criteria)
 
-    return NextResponse.json({
+    const responsePayload = {
       success: true,
       event,
       leaderboard,
       criteria,
       podium: leaderboard.slice(0, 3),
+    }
+
+    memoryCache.set(cacheKey, responsePayload, 300, ['events', `event:${eventId}`])
+
+    return NextResponse.json(responsePayload, {
+      headers: publicCacheHeaders(300, 600),
     })
   } catch (err: any) {
     return NextResponse.json(

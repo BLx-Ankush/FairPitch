@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
 import { DEMO_COOKIE_NAME, verifyDemoCookie } from '@/lib/auth/demo-cookie'
 
+import { memoryCache } from '@/lib/cache/memory-cache'
+
 export interface CallerContext {
   user: { id: string; email: string; isJury?: boolean }
   profile: {
@@ -26,21 +28,29 @@ export async function getCallerContext(): Promise<CallerContext | null> {
     } = await supabase.auth.getUser()
 
     if (!userErr && user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id, role, organizer_approval_status, institution_id, full_name')
-        .eq('id', user.id)
-        .single()
+      const profileCacheKey = `user:guard-profile:${user.id}`
+      let profile = memoryCache.get<any>(profileCacheKey)
 
-      return {
-        user: { id: user.id, email: user.email || '' },
-        profile: profile || {
+      if (!profile) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, role, organizer_approval_status, institution_id, full_name')
+          .eq('id', user.id)
+          .single()
+
+        profile = data || {
           id: user.id,
           role: 'user',
           organizer_approval_status: 'none',
           institution_id: null,
           full_name: '',
-        },
+        }
+        memoryCache.set(profileCacheKey, profile, 15, [`user:${user.id}`])
+      }
+
+      return {
+        user: { id: user.id, email: user.email || '' },
+        profile,
       }
     }
   } catch {}

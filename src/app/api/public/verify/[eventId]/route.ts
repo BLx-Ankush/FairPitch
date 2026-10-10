@@ -5,6 +5,7 @@ import {
   verifyChainBlocks,
   JudgeChainVerification,
 } from '@/lib/crypto/merkle'
+import { memoryCache, publicCacheHeaders } from '@/lib/cache/memory-cache'
 
 export async function GET(
   request: Request,
@@ -12,7 +13,17 @@ export async function GET(
 ) {
   try {
     const { eventId } = await params
+    const cacheKey = `merkle:verify:${eventId}`
+
+    const cachedVerification = memoryCache.get<any>(cacheKey)
+    if (cachedVerification) {
+      return NextResponse.json(cachedVerification, {
+        headers: publicCacheHeaders(60, 120),
+      })
+    }
+
     const serviceClient = getServiceSupabase()
+
 
     // 1. Fetch event metadata
     const { data: event, error: eventErr } = await serviceClient
@@ -100,7 +111,7 @@ export async function GET(
     const overallIntegrity =
       isMerkleRootValid && areJudgeChainsValid && eventChainVerification.isValid
 
-    return NextResponse.json({
+    const responsePayload = {
       success: true,
       event,
       verification: {
@@ -115,6 +126,13 @@ export async function GET(
         chainHeadCount: chainHeads.length,
         verifiedAt: new Date().toISOString(),
       },
+    }
+
+    const ttl = event.status === 'published' ? 3600 : 60
+    memoryCache.set(cacheKey, responsePayload, ttl, ['events', `event:${eventId}`, `merkle:${eventId}`])
+
+    return NextResponse.json(responsePayload, {
+      headers: publicCacheHeaders(ttl, 120),
     })
   } catch (err: any) {
     return NextResponse.json(

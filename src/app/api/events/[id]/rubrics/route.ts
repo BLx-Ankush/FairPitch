@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
 import { requireEventOrganizer } from '@/lib/auth/guards'
+import { memoryCache } from '@/lib/cache/memory-cache'
 
 export async function GET(
   request: Request,
@@ -9,6 +10,13 @@ export async function GET(
 ) {
   try {
     const { id } = await params
+    const cacheKey = `rubric:${id}`
+
+    const cached = memoryCache.get<any>(cacheKey)
+    if (cached) {
+      return NextResponse.json(cached)
+    }
+
     const supabase = await createClient()
 
     const { data: criteria, error } = await supabase
@@ -24,12 +32,16 @@ export async function GET(
     const criteriaList = criteria || []
     const totalWeight = criteriaList.reduce((acc: number, c: any) => acc + Number(c.weight), 0)
 
-    return NextResponse.json({
+    const responsePayload = {
       success: true,
       criteria: criteriaList,
       totalWeight,
       isRubricValid: totalWeight === 100,
-    })
+    }
+
+    memoryCache.set(cacheKey, responsePayload, 120, ['rubrics', `rubric:${id}`, `event:${id}`])
+
+    return NextResponse.json(responsePayload)
   } catch (err: any) {
     return NextResponse.json(
       { error: err.message || 'Internal server error' },
@@ -37,6 +49,7 @@ export async function GET(
     )
   }
 }
+
 
 export async function POST(
   request: Request,
@@ -96,6 +109,9 @@ export async function POST(
         return NextResponse.json({ error: bulkErr?.message || 'Failed to apply preset' }, { status: 400 })
       }
 
+      memoryCache.invalidateTag(`rubric:${id}`)
+      memoryCache.invalidateTag(`event:${id}`)
+
       return NextResponse.json({ success: true, criteria: inserted })
     }
 
@@ -134,6 +150,9 @@ export async function POST(
     if (insertErr || !criterion) {
       return NextResponse.json({ error: insertErr?.message || 'Failed to insert criterion' }, { status: 400 })
     }
+
+    memoryCache.invalidateTag(`rubric:${id}`)
+    memoryCache.invalidateTag(`event:${id}`)
 
     return NextResponse.json({ success: true, criterion })
   } catch (err: any) {

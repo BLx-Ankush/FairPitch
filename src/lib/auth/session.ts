@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
+import { memoryCache } from '@/lib/cache/memory-cache'
 import { type AuthContext, type UserProfile, type UserEventRole, CURRENT_CONSENT_VERSION } from './roles'
 
 export { CURRENT_CONSENT_VERSION }
@@ -19,8 +20,13 @@ export async function getAuthUser() {
 
 /**
  * Retrieves the profile of a given user ID.
+ * Scoped strictly to the individual userId with a 15-second TTL.
  */
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+  const cacheKey = `user:profile:${userId}`
+  const cached = memoryCache.get<UserProfile>(cacheKey)
+  if (cached) return cached
+
   try {
     const supabase = await createClient()
     const { data, error } = await supabase
@@ -29,7 +35,11 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
       .eq('id', userId)
       .single()
 
-    if (!error && data) return data as UserProfile
+    if (!error && data) {
+      const profile = data as UserProfile
+      memoryCache.set(cacheKey, profile, 15, [`user:${userId}`])
+      return profile
+    }
   } catch {}
 
   return null

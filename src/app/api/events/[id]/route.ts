@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
+import { memoryCache } from '@/lib/cache/memory-cache'
 
 export async function GET(
   request: Request,
@@ -8,6 +9,13 @@ export async function GET(
 ) {
   try {
     const { id } = await params
+    const cacheKey = `event:details:${id}`
+
+    const cached = memoryCache.get<any>(cacheKey)
+    if (cached) {
+      return NextResponse.json(cached)
+    }
+
     const supabase = await createClient()
 
     const { data: event, error: eventErr } = await supabase
@@ -36,7 +44,7 @@ export async function GET(
     // Calculate total weight sum
     const totalWeight = (criteria || []).reduce((acc: number, c: any) => acc + Number(c.weight), 0)
 
-    return NextResponse.json({
+    const responsePayload = {
       success: true,
       event: {
         ...event,
@@ -46,7 +54,11 @@ export async function GET(
         isRubricValid: totalWeight === 100,
         isRubricFrozen: ['judging', 'review', 'published'].includes(event.status),
       },
-    })
+    }
+
+    memoryCache.set(cacheKey, responsePayload, 60, ['events', `event:${id}`])
+
+    return NextResponse.json(responsePayload)
   } catch (err: any) {
     return NextResponse.json(
       { error: err.message || 'Internal server error' },
@@ -54,6 +66,7 @@ export async function GET(
     )
   }
 }
+
 
 export async function PATCH(
   request: Request,
@@ -107,6 +120,8 @@ export async function PATCH(
     if (updateErr) {
       return NextResponse.json({ error: updateErr.message }, { status: 400 })
     }
+
+    memoryCache.invalidateTag(`event:${id}`)
 
     return NextResponse.json({ success: true, event: updatedEvent })
   } catch (err: any) {

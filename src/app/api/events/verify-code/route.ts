@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
+import { memoryCache, publicCacheHeaders } from '@/lib/cache/memory-cache'
 
 export async function GET(request: Request) {
   try {
@@ -14,6 +15,16 @@ export async function GET(request: Request) {
     }
 
     const cleanCode = code.toUpperCase()
+    const cacheKey = `event:code:${cleanCode}`
+
+    const cachedData = memoryCache.get<any>(cacheKey)
+    if (cachedData) {
+      return NextResponse.json(
+        { success: true, event: cachedData, source: 'cache' },
+        { headers: publicCacheHeaders(60, 300) }
+      )
+    }
+
     const serviceClient = getServiceSupabase()
 
     // Search by event_code, slug, or ID
@@ -41,28 +52,38 @@ export async function GET(request: Request) {
 
     if (dbEvents && dbEvents.length > 0) {
       const ev = dbEvents[0]
-      return NextResponse.json({
-        success: true,
-        event: {
-          id: ev.id,
-          title: ev.title,
-          slug: ev.slug,
-          eventCode: ev.event_code || ev.slug?.toUpperCase() || cleanCode,
-          description: ev.description,
-          registrationFee: Number(ev.registration_fee) || 0,
-          upiId: ev.upi_id,
-          upiName: ev.upi_name,
-          institutionName: (ev.institutions as any)?.name || 'FairPitch Partner Organization',
-          tracks: [
-            'AI & Machine Learning',
-            'Web3 & Fintech',
-            'Open Innovation',
-            'Healthcare & Biotech',
-            'Smart Cities & IoT',
-          ],
-          status: ev.status,
+      const formattedEvent = {
+        id: ev.id,
+        title: ev.title,
+        slug: ev.slug,
+        eventCode: ev.event_code || ev.slug?.toUpperCase() || cleanCode,
+        description: ev.description,
+        registrationFee: Number(ev.registration_fee) || 0,
+        upiId: ev.upi_id,
+        upiName: ev.upi_name,
+        institutionName: (ev.institutions as any)?.name || 'FairPitch Partner Organization',
+        tracks: [
+          'AI & Machine Learning',
+          'Web3 & Fintech',
+          'Open Innovation',
+          'Healthcare & Biotech',
+          'Smart Cities & IoT',
+        ],
+        status: ev.status,
+      }
+
+      // Cache for 60 seconds with tag for invalidation when event is modified
+      memoryCache.set(cacheKey, formattedEvent, 60, ['events', `event:${ev.id}`])
+
+      return NextResponse.json(
+        {
+          success: true,
+          event: formattedEvent,
         },
-      })
+        {
+          headers: publicCacheHeaders(60, 300),
+        }
+      )
     }
 
     return NextResponse.json(
@@ -78,3 +99,4 @@ export async function GET(request: Request) {
     )
   }
 }
+

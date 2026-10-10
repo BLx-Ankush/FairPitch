@@ -4,6 +4,7 @@ import { getServiceSupabase } from '@/lib/supabase/service-role'
 import { computeHeadToHeadAnalysis } from '@/lib/autopsy/math'
 import { generateAutopsy } from '@/lib/autopsy/gemini'
 import { calculateLeaderboard } from '@/lib/fairness/engine'
+import { memoryCache, privateNoStoreHeaders } from '@/lib/cache/memory-cache'
 
 export async function GET(
   request: Request,
@@ -72,7 +73,21 @@ export async function GET(
       }
     }
 
-    // 3. Check if autopsy already exists in database
+    // 3. Check memory cache first (cache-aside)
+    const cacheKey = `autopsy:${eventId}:${teamId}`
+    const cachedAutopsy = memoryCache.get<any>(cacheKey)
+    if (cachedAutopsy) {
+      return NextResponse.json(
+        {
+          success: true,
+          autopsy: cachedAutopsy,
+          source: 'cache',
+        },
+        { headers: privateNoStoreHeaders() }
+      )
+    }
+
+    // 4. Check if autopsy already exists in database
     const { data: existingAutopsy } = await supabase
       .from('autopsies')
       .select('*')
@@ -81,14 +96,18 @@ export async function GET(
       .maybeSingle()
 
     if (existingAutopsy) {
-      return NextResponse.json({
-        success: true,
-        autopsy: existingAutopsy,
-        source: 'database',
-      })
+      memoryCache.set(cacheKey, existingAutopsy, 1800, ['autopsies', `autopsy:${teamId}`])
+      return NextResponse.json(
+        {
+          success: true,
+          autopsy: existingAutopsy,
+          source: 'database',
+        },
+        { headers: privateNoStoreHeaders() }
+      )
     }
 
-    // 4. If not exists, generate it
+    // 5. If not exists, generate it
     const [criteriaRes, teamsRes, judgesRes, scoresRes] = await Promise.all([
       supabase
         .from('rubric_criteria')
@@ -197,11 +216,16 @@ export async function GET(
       return NextResponse.json({ error: insertErr.message }, { status: 500 })
     }
 
-    return NextResponse.json({
-      success: true,
-      autopsy: savedAutopsy,
-      source: 'generated',
-    })
+    memoryCache.set(cacheKey, savedAutopsy, 1800, ['autopsies', `autopsy:${teamId}`])
+
+    return NextResponse.json(
+      {
+        success: true,
+        autopsy: savedAutopsy,
+        source: 'generated',
+      },
+      { headers: privateNoStoreHeaders() }
+    )
   } catch (err: any) {
     return NextResponse.json(
       { error: err.message || 'Internal server error' },
