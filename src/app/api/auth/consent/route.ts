@@ -41,15 +41,21 @@ export async function POST(request: Request) {
         .from('institutions')
         .select('id')
         .limit(1)
-        .single()
-      institutionId = inst?.id
-    }
+        .maybeSingle()
 
-    if (!institutionId) {
-      return NextResponse.json(
-        { error: 'No active institution found to bind consent' },
-        { status: 400 }
-      )
+      if (inst?.id) {
+        institutionId = inst.id
+      } else {
+        // Auto-provision default foundation institution so consent is NEVER blocked on clean DB
+        const defaultInstId = 'a0000000-0000-0000-0000-000000000001'
+        await serviceClient.from('institutions').upsert({
+          id: defaultInstId,
+          name: 'FairPitch Platform Foundation',
+          slug: 'fairpitch-foundation',
+          contact_email: 'compliance@fairpitch.io',
+        })
+        institutionId = defaultInstId
+      }
     }
 
     const forwarded = request.headers.get('x-forwarded-for')
