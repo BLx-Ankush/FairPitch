@@ -1959,3 +1959,43 @@ WHERE event_code IS NULL;
 -- Create case-insensitive unique index on event_code
 CREATE UNIQUE INDEX IF NOT EXISTS idx_events_event_code ON public.events (UPPER(event_code));
 
+
+-- ================================================================
+-- 20261001000008_performance_and_scale_indexes.sql
+-- ================================================================
+
+-- Migration: 20261001000008_performance_and_scale_indexes.sql
+-- Description: Targeted performance and scalability indexes for high-volume hackathon traffic.
+
+CREATE INDEX IF NOT EXISTS idx_scores_judge_lookup 
+ON public.scores (judge_id, event_id, team_id, criterion_id, version DESC);
+
+CREATE INDEX IF NOT EXISTS idx_teams_join_code 
+ON public.teams (join_code) 
+WHERE join_code IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_teams_created_by 
+ON public.teams (created_by, created_at DESC) 
+WHERE created_by IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_event_blocks 
+ON public.audit_log (event_id, block_index ASC);
+
+CREATE INDEX IF NOT EXISTS idx_profiles_institution_org_status 
+ON public.profiles (institution_id, organizer_approval_status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_events_institution_created 
+ON public.events (institution_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_edit_requests_event_judge 
+ON public.edit_requests (event_id, judge_id, status);
+
+CREATE INDEX IF NOT EXISTS idx_review_requests_event_status 
+ON public.review_requests (event_id, status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_teams_event_created 
+ON public.teams (event_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_submissions_event_team 
+ON public.submissions (event_id, team_id);
+
