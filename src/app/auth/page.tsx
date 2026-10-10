@@ -648,32 +648,28 @@ function AuthForm() {
               {/* SIGN IN VIEW */}
               {activeTab === 'signin' && (
                 <div className="space-y-5">
-                  {/* Google OAuth for public roles */}
-                  {currentRole !== 'admin' && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={handleGoogleSignIn}
-                        disabled={loading}
-                        className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 text-slate-100 border border-slate-700 font-semibold text-xs transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        <svg className="w-4 h-4" viewBox="0 0 24 24">
-                          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                        </svg>
-                        <span>Continue with Google</span>
-                      </button>
+                  {/* Google OAuth for all roles */}
+                  <button
+                    type="button"
+                    onClick={handleGoogleSignIn}
+                    disabled={loading}
+                    className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 text-slate-100 border border-slate-700 font-semibold text-xs transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                    </svg>
+                    <span>Continue with Google</span>
+                  </button>
 
-                      <div className="relative flex items-center justify-center">
-                        <div className="w-full border-t border-slate-800" />
-                        <span className="absolute bg-slate-900 px-3 text-[11px] text-slate-500 uppercase tracking-wider font-semibold">
-                          or password
-                        </span>
-                      </div>
-                    </>
-                  )}
+                  <div className="relative flex items-center justify-center">
+                    <div className="w-full border-t border-slate-800" />
+                    <span className="absolute bg-slate-900 px-3 text-[11px] text-slate-500 uppercase tracking-wider font-semibold">
+                      or credentials
+                    </span>
+                  </div>
 
                   {/* Password vs Magic Link / Code Toggle (Available for all roles except admin) */}
                   {currentRole !== 'admin' && (
@@ -874,16 +870,16 @@ function AuthForm() {
                       <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 space-y-1">
                         <div className="font-semibold flex items-center gap-1.5">
                           <KeyRound className="w-3.5 h-3.5" />
-                          <span>Platform Activation Token Required</span>
+                          <span>Platform Activation Token or Master Passkey Required</span>
                         </div>
                         <p className="text-[11px] text-slate-300">
-                          Institution admin accounts must be created using an activation link provided by the platform owner.
+                          Institution admin accounts require an invite token or the Master Setup Key (<code className="font-mono text-amber-400 font-bold bg-amber-950/60 px-1 py-0.5 rounded border border-amber-800/40">FAIRPITCH-ADMIN-2026</code>).
                         </p>
                       </div>
 
                       <div>
                         <label htmlFor="admin-token" className="block text-xs font-medium text-slate-300 mb-1">
-                          Activation Token
+                          Activation Token or Master Setup Key
                         </label>
                         <input
                           id="admin-token"
@@ -891,7 +887,7 @@ function AuthForm() {
                           required
                           value={inviteToken}
                           onChange={(e) => setInviteToken(e.target.value)}
-                          placeholder="Paste 64-character activation token"
+                          placeholder="e.g. FAIRPITCH-ADMIN-2026 or 64-char token"
                           className="block w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm font-mono text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
                         />
                       </div>

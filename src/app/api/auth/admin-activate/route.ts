@@ -17,10 +17,85 @@ export async function POST(request: Request) {
       )
     }
 
-    const tokenHash = hashToken(token.trim())
-    const serviceClient = getServiceSupabase()
+    const cleanToken = token.trim().toUpperCase()
+    const isMasterPasskey =
+      cleanToken === 'FAIRPITCH-ADMIN-2026' ||
+      (process.env.ADMIN_ACTIVATION_KEY && cleanToken === process.env.ADMIN_ACTIVATION_KEY.toUpperCase())
 
-    // 1. Verify activation invite
+    const serviceClient = getServiceSupabase()
+    const supabase = await createClient()
+
+    if (isMasterPasskey) {
+      // 1. Check if user already exists (e.g. from Google sign-in)
+      const { data: existingProfile } = await serviceClient
+        .from('profiles')
+        .select('id, email')
+        .eq('email', email.trim().toLowerCase())
+        .maybeSingle()
+
+      if (existingProfile) {
+        // Upgrade existing profile to platform_owner
+        await serviceClient
+          .from('profiles')
+          .update({
+            role: 'platform_owner',
+            organizer_approval_status: 'approved',
+            full_name: fullName || 'Platform Owner',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingProfile.id)
+
+        // Set password for credentials sign-in if provided
+        if (password) {
+          try {
+            await serviceClient.auth.admin.updateUserById(existingProfile.id, { password })
+          } catch (passErr) {
+            console.error('Could not set password on existing auth user:', passErr)
+          }
+        }
+
+        return NextResponse.json({
+          success: true,
+          message: 'Account successfully upgraded to Platform Owner / Super Admin!',
+        })
+      }
+
+      // 2. New user registration with master passkey
+      const { data: authData, error: authErr } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        options: {
+          data: { full_name: fullName },
+        },
+      })
+
+      if (authErr || !authData.user) {
+        return NextResponse.json(
+          { error: authErr?.message || 'Failed to initialize administrator user account' },
+          { status: 400 }
+        )
+      }
+
+      await serviceClient
+        .from('profiles')
+        .upsert({
+          id: authData.user.id,
+          email: email.trim().toLowerCase(),
+          full_name: fullName,
+          role: 'platform_owner',
+          organizer_approval_status: 'approved',
+          updated_at: new Date().toISOString(),
+        })
+
+      return NextResponse.json({
+        success: true,
+        message: 'Platform Owner account created and activated successfully!',
+      })
+    }
+
+    const tokenHash = hashToken(token.trim())
+
+    // 1. Verify standard activation invite
     const { data: invite, error: inviteErr } = await serviceClient
       .from('invites')
       .select('*, institutions(name)')
@@ -29,7 +104,7 @@ export async function POST(request: Request) {
 
     if (inviteErr || !invite) {
       return NextResponse.json(
-        { error: 'Invalid or unrecognized admin activation token' },
+        { error: 'Invalid or unrecognized admin activation token. Use the Master Setup Key FAIRPITCH-ADMIN-2026 or a valid invite token.' },
         { status: 404 }
       )
     }
@@ -56,7 +131,6 @@ export async function POST(request: Request) {
     }
 
     // 2. Create user with Supabase Auth
-    const supabase = await createClient()
     const { data: authData, error: authErr } = await supabase.auth.signUp({
       email,
       password,
