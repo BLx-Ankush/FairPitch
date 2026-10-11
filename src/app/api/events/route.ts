@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
-
 import { getAuthUser, getUserProfile } from '@/lib/auth/session'
 
 export async function GET() {
@@ -12,14 +10,14 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const supabase = await createClient()
+    const serviceClient = getServiceSupabase()
     const profile = await getUserProfile(user.id)
 
-    const query = supabase
+    const query = serviceClient
       .from('events')
       .select('*, institutions(name)')
 
-    // Scope to institution unless platform owner
+    // Scope to institution unless platform owner or user without institution
     if (profile?.role !== 'platform_owner' && profile?.institution_id) {
       query.eq('institution_id', profile.institution_id)
     }
@@ -41,17 +39,14 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-      error: authErr,
-    } = await supabase.auth.getUser()
+    const user = await getAuthUser()
 
-    if (authErr || !user) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
+    const serviceClient = getServiceSupabase()
+    const { data: profile } = await serviceClient
       .from('profiles')
       .select('institution_id, role, organizer_approval_status')
       .eq('id', user.id)
@@ -70,24 +65,44 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const {
-      title,
-      description,
-      startDate,
-      endDate,
-      registrationDeadline,
-      submissionDeadline,
-      blindMode = false,
-      minJudgesPerTeam = 3,
-      judgingMode = 'rubric',
-      institutionId = profile?.institution_id,
-    } = body
+    const title = (body.title || '').trim()
+    const description = body.description || null
+    const startDateVal = body.startDate || body.start_date || new Date().toISOString()
+    const endDateVal =
+      body.endDate ||
+      body.end_date ||
+      new Date(new Date(startDateVal).getTime() + 7 * 86400000).toISOString()
+    const registrationDeadline = body.registrationDeadline || body.registration_deadline || null
+    const submissionDeadline = body.submissionDeadline || body.submission_deadline || null
+    const blindMode = body.blindMode ?? body.blind_mode ?? false
+    const minJudgesPerTeam = Number(body.minJudgesPerTeam ?? body.min_judges_per_team) || 3
+    const judgingMode = body.judgingMode || body.judging_mode || 'rubric'
 
-    if (!title || !startDate || !endDate) {
+    if (!title) {
       return NextResponse.json(
-        { error: 'Event title, start date, and end date are required' },
+        { error: 'Event title is required' },
         { status: 400 }
       )
+    }
+
+    let institutionId = body.institutionId || body.institution_id || profile?.institution_id
+
+    // Fallback: auto-resolve to default/first institution if not explicitly assigned
+    if (!institutionId) {
+      const { data: defaultInst } = await serviceClient
+        .from('institutions')
+        .select('id')
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .single()
+
+      if (defaultInst) {
+        institutionId = defaultInst.id
+        await serviceClient
+          .from('profiles')
+          .update({ institution_id: defaultInst.id })
+          .eq('id', user.id)
+      }
     }
 
     if (!institutionId) {
@@ -115,10 +130,6 @@ export async function POST(request: Request) {
     const regFee = Number(body.registration_fee ?? body.registrationFee) || 0
     const upiIdVal = body.upi_id || body.upiId || null
     const upiNameVal = body.upi_name || body.upiName || null
-    const startDateVal = body.startDate || body.start_date || new Date().toISOString()
-    const endDateVal = body.endDate || body.end_date || new Date(Date.now() + 7 * 86400000).toISOString()
-
-    const serviceClient = getServiceSupabase()
 
     // Build insert payload with event_code and UPI fields
     const insertPayload: any = {
@@ -126,14 +137,14 @@ export async function POST(request: Request) {
       title,
       slug,
       event_code: generatedEventCode,
-      description: description || null,
+      description,
       start_date: new Date(startDateVal).toISOString(),
       end_date: new Date(endDateVal).toISOString(),
       registration_deadline: registrationDeadline ? new Date(registrationDeadline).toISOString() : null,
       submission_deadline: submissionDeadline ? new Date(submissionDeadline).toISOString() : null,
       status: 'open',
       blind_mode: Boolean(blindMode),
-      min_judges_per_team: Number(minJudgesPerTeam) || 3,
+      min_judges_per_team: minJudgesPerTeam,
       judging_mode: judgingMode,
       registration_fee: regFee,
       upi_id: upiIdVal,
@@ -159,20 +170,29 @@ export async function POST(request: Request) {
       createErr = retryRes.error
     }
 
-    if (createErr) {
-      return NextResponse.json({ error: createErr.message }, { status: 400 })
+    if (createErr || !event) {
+      return NextResponse.json({ error: createErr?.message || 'Failed to create event' }, { status: 400 })
     }
 
-    // Register caller as event admin in event_roles
-    await serviceClient.from('event_roles').insert({
-      user_id: user.id,
-      event_id: event.id,
-      institution_id: institutionId,
-      role: 'organizer',
-      status: 'active',
-    })
+    // Attach event_code to returned event object
+    const enrichedEvent = {
+      ...event,
+      event_code: event.event_code || generatedEventCode,
+    }
 
-    return NextResponse.json({ success: true, event })
+    // Register caller as event organizer in event_roles
+    await serviceClient.from('event_roles').upsert(
+      {
+        user_id: user.id,
+        event_id: event.id,
+        institution_id: institutionId,
+        role: 'organizer',
+        status: 'active',
+      },
+      { onConflict: 'event_id,user_id,role' }
+    )
+
+    return NextResponse.json({ success: true, event: enrichedEvent })
   } catch (err: any) {
     return NextResponse.json(
       { error: err.message || 'Internal server error' },

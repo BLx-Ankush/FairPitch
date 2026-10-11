@@ -80,6 +80,7 @@ export default function OrganizerWorkspacePage() {
   const [newEventDesc, setNewEventDesc] = useState('')
   const [newEventCode, setNewEventCode] = useState('')
   const [newEventDate, setNewEventDate] = useState('')
+  const [newEventEndDate, setNewEventEndDate] = useState('')
   const [newRegFee, setNewRegFee] = useState('0')
   const [newUpiVpa, setNewUpiVpa] = useState('')
   const [newUpiName, setNewUpiName] = useState('')
@@ -256,6 +257,11 @@ export default function OrganizerWorkspacePage() {
     e.preventDefault()
     setActionLoading(true)
     try {
+      const startIso = newEventDate ? new Date(newEventDate).toISOString() : new Date().toISOString()
+      const endIso = newEventEndDate
+        ? new Date(newEventEndDate).toISOString()
+        : new Date(new Date(startIso).getTime() + 7 * 86400000).toISOString()
+
       const res = await fetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -263,7 +269,10 @@ export default function OrganizerWorkspacePage() {
           title: newEventTitle,
           description: newEventDesc,
           event_code: newEventCode.trim().toUpperCase(),
-          start_date: newEventDate || new Date().toISOString(),
+          startDate: startIso,
+          endDate: endIso,
+          start_date: startIso,
+          end_date: endIso,
           registration_fee: Number(newRegFee) || 0,
           upi_id: newUpiVpa,
           upi_name: newUpiName,
@@ -271,16 +280,27 @@ export default function OrganizerWorkspacePage() {
         }),
       })
 
-      if (res.ok) {
+      const data = await res.json()
+      if (res.ok && (data.success || data.event)) {
         showToast('Event created successfully!')
         await fetchEvents()
+        if (data.event?.id) {
+          setSelectedEventId(data.event.id)
+        }
+        setNewEventTitle('')
+        setNewEventDesc('')
+        setNewEventCode('')
+        setNewEventDate('')
+        setNewEventEndDate('')
+        setNewRegFee('0')
+        setNewUpiVpa('')
+        setNewUpiName('')
         setCurrentView('events')
       } else {
-        const d = await res.json().catch(() => ({}))
-        showToast(d.error || 'Failed to create event')
+        showToast(data.error || 'Failed to create event')
       }
-    } catch {
-      showToast('Network error while creating event')
+    } catch (err: any) {
+      showToast(err?.message || 'Network error while creating event')
     } finally {
       setActionLoading(false)
     }
@@ -900,7 +920,7 @@ export default function OrganizerWorkspacePage() {
                       />
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
                         <label className="block text-xs font-semibold text-slate-300 mb-1">Start Date *</label>
                         <input
@@ -911,7 +931,16 @@ export default function OrganizerWorkspacePage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-300 mb-1">Team Registration Fee (₹ INR)</label>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">End Date</label>
+                        <input
+                          type="date"
+                          value={newEventEndDate}
+                          onChange={(e) => setNewEventEndDate(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Team Fee (₹ INR)</label>
                         <input
                           type="number"
                           value={newRegFee}
