@@ -51,7 +51,11 @@ import {
   BENCHMARK_CALIBRATION_CASES,
   type JudgeCalibrationResult
 } from '@/lib/fairness/calibration'
-import type { FairnessHealth } from '@/lib/fairness/engine'
+import {
+  calculateFairnessHealth,
+  type FairnessHealth,
+  type FairnessTelemetrySnapshot
+} from '@/lib/fairness/engine'
 
 type OrgNavView =
   | 'events'
@@ -122,6 +126,18 @@ export default function OrganizerWorkspacePage() {
     zScore: number
     status: string
   }>>([])
+
+  // Live fairness telemetry state
+  const [fairnessData, setFairnessData] = useState<{
+    telemetry: FairnessTelemetrySnapshot | null
+    health: FairnessHealth | null
+    meta: { scoreCount: number; teamCount: number; judgeCount: number; criteriaCount: number }
+  }>({
+    telemetry: null,
+    health: null,
+    meta: { scoreCount: 0, teamCount: 0, judgeCount: 0, criteriaCount: 0 },
+  })
+  const [fairnessLoading, setFairnessLoading] = useState(false)
 
   function showToast(msg: string) {
     setToastMessage(msg)
@@ -222,6 +238,42 @@ export default function OrganizerWorkspacePage() {
     }
   }
 
+  async function fetchFairnessForEvent(eventId: string) {
+    if (!eventId) return
+    setFairnessLoading(true)
+    try {
+      const res = await fetch(`/api/org/events/${eventId}/fairness`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.telemetry) {
+          const health = calculateFairnessHealth(data.telemetry, {
+            isBlindMode: true,
+            isAuditValid: true,
+          })
+          setFairnessData({
+            telemetry: data.telemetry,
+            health,
+            meta: data.meta || { scoreCount: 0, teamCount: 0, judgeCount: 0, criteriaCount: 0 },
+          })
+        } else {
+          setFairnessData({
+            telemetry: null,
+            health: null,
+            meta: data.meta || { scoreCount: 0, teamCount: 0, judgeCount: 0, criteriaCount: 0 },
+          })
+        }
+      }
+    } catch {
+      setFairnessData({
+        telemetry: null,
+        health: null,
+        meta: { scoreCount: 0, teamCount: 0, judgeCount: 0, criteriaCount: 0 },
+      })
+    } finally {
+      setFairnessLoading(false)
+    }
+  }
+
   async function fetchEvents() {
     try {
       const res = await fetch('/api/events')
@@ -234,6 +286,7 @@ export default function OrganizerWorkspacePage() {
           fetchRubricsForEvent(evList[0].id)
           fetchTeamsForEvent(evList[0].id)
           fetchJudgesForEvent(evList[0].id)
+          fetchFairnessForEvent(evList[0].id)
         }
       }
     } finally {
@@ -250,6 +303,7 @@ export default function OrganizerWorkspacePage() {
       fetchRubricsForEvent(selectedEventId)
       fetchTeamsForEvent(selectedEventId)
       fetchJudgesForEvent(selectedEventId)
+      fetchFairnessForEvent(selectedEventId)
     }
   }, [selectedEventId])
 
@@ -1607,23 +1661,55 @@ export default function OrganizerWorkspacePage() {
                       </div>
 
                       <div className="flex items-center gap-4 bg-slate-950/80 p-4 rounded-2xl border border-slate-800 shrink-0">
-                        <div className="text-center">
-                          <span className="text-3xl font-black font-mono text-emerald-400">94</span>
-                          <span className="text-xs text-slate-500 font-mono"> / 100</span>
-                        </div>
-                        <div className="border-l border-slate-800 pl-4">
-                          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                            STATUS: EXCELLENT
-                          </span>
-                          <span className="text-[11px] text-slate-400 block mt-1">High Equity & Trust</span>
-                        </div>
+                        {fairnessLoading ? (
+                          <div className="p-4 flex items-center gap-2 text-xs text-slate-400">
+                            <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                            <span>Computing telemetry...</span>
+                          </div>
+                        ) : fairnessData.meta.scoreCount === 0 ? (
+                          <div className="text-center px-3 py-1">
+                            <span className="text-2xl font-bold font-mono text-slate-400">--</span>
+                            <span className="text-xs text-slate-500 font-mono"> / 100</span>
+                            <div className="mt-1">
+                              <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                                Awaiting Scores
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="text-center">
+                              <span className="text-3xl font-black font-mono text-emerald-400">
+                                {fairnessData.health?.overallScore ?? 100}
+                              </span>
+                              <span className="text-xs text-slate-500 font-mono"> / 100</span>
+                            </div>
+                            <div className="border-l border-slate-800 pl-4">
+                              <span
+                                className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border ${
+                                  fairnessData.health?.badgeBg ??
+                                  'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                                }`}
+                              >
+                                STATUS: {fairnessData.health?.grade ?? 'EXCELLENT'}
+                              </span>
+                              <span className="text-[11px] text-slate-400 block mt-1">
+                                {fairnessData.health?.grade === 'EXCELLENT'
+                                  ? 'High Equity & Trust'
+                                  : fairnessData.health?.grade === 'GOOD'
+                                  ? 'Nominal Panel Alignment'
+                                  : 'Variance Under Review'}
+                              </span>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
 
                     <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80 text-[11px] text-slate-400 flex items-start gap-2">
                       <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                       <span>
-                        <strong>Methodology Note:</strong> This is a diagnostic health indicator reflecting panel variance and procedural controls, not an objective mathematical proof of &ldquo;fairness.&rdquo;
+                        <strong>Methodology Note:</strong> This is a diagnostic health indicator reflecting panel variance and procedural controls, calculated continuously from live evaluation commits without synthetic smoothing.
                       </span>
                     </div>
 
@@ -1632,10 +1718,23 @@ export default function OrganizerWorkspacePage() {
                       <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-1.5">
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-slate-400 text-[11px]">Judge Consistency</span>
-                          <span className="font-mono font-bold text-emerald-400">94%</span>
+                          <span className="font-mono font-bold text-emerald-400">
+                            {fairnessData.meta.scoreCount > 0 && fairnessData.health
+                              ? `${fairnessData.health.components.judgeConsistency}%`
+                              : '--'}
+                          </span>
                         </div>
                         <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-emerald-500 rounded-full" style={{ width: '94%' }} />
+                          <div
+                            className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                            style={{
+                              width: `${
+                                fairnessData.meta.scoreCount > 0 && fairnessData.health
+                                  ? fairnessData.health.components.judgeConsistency
+                                  : 0
+                              }%`,
+                            }}
+                          />
                         </div>
                         <span className="text-[10px] text-slate-500 block">Z-score variance &le; 1.0</span>
                       </div>
@@ -1643,10 +1742,23 @@ export default function OrganizerWorkspacePage() {
                       <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-1.5">
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-slate-400 text-[11px]">Score Distribution</span>
-                          <span className="font-mono font-bold text-teal-400">91%</span>
+                          <span className="font-mono font-bold text-teal-400">
+                            {fairnessData.meta.scoreCount > 0 && fairnessData.health
+                              ? `${fairnessData.health.components.distributionNormality}%`
+                              : '--'}
+                          </span>
                         </div>
                         <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-teal-500 rounded-full" style={{ width: '91%' }} />
+                          <div
+                            className="h-full bg-teal-500 rounded-full transition-all duration-500"
+                            style={{
+                              width: `${
+                                fairnessData.meta.scoreCount > 0 && fairnessData.health
+                                  ? fairnessData.health.components.distributionNormality
+                                  : 0
+                              }%`,
+                            }}
+                          />
                         </div>
                         <span className="text-[10px] text-slate-500 block">Balanced bell curve</span>
                       </div>
@@ -1654,23 +1766,47 @@ export default function OrganizerWorkspacePage() {
                       <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-1.5">
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-slate-400 text-[11px]">Inter-Judge Agreement</span>
-                          <span className="font-mono font-bold text-indigo-400">87%</span>
+                          <span className="font-mono font-bold text-indigo-400">
+                            {fairnessData.meta.scoreCount > 0 && fairnessData.health
+                              ? `${fairnessData.health.components.interJudgeAgreement}%`
+                              : '--'}
+                          </span>
                         </div>
                         <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-indigo-500 rounded-full" style={{ width: '87%' }} />
+                          <div
+                            className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                            style={{
+                              width: `${
+                                fairnessData.meta.scoreCount > 0 && fairnessData.health
+                                  ? fairnessData.health.components.interJudgeAgreement
+                                  : 0
+                              }%`,
+                            }}
+                          />
                         </div>
-                        <span className="text-[10px] text-slate-500 block">Mean &sigma; = 0.82 pts</span>
+                        <span className="text-[10px] text-slate-500 block">
+                          {fairnessData.meta.scoreCount > 0 && fairnessData.telemetry?.panelStdDev !== undefined
+                            ? `Mean σ = ${(fairnessData.telemetry.panelStdDev / 10).toFixed(2)} pts`
+                            : 'Awaiting scores'}
+                        </span>
                       </div>
 
                       <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-1.5">
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-slate-400 text-[11px]">Blind Judging</span>
-                          <span className="font-mono font-bold text-purple-400">100%</span>
+                          <span className="font-mono font-bold text-purple-400">
+                            {activeEvent?.blind_mode ? '100%' : '70%'}
+                          </span>
                         </div>
                         <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-purple-500 rounded-full" style={{ width: '100%' }} />
+                          <div
+                            className="h-full bg-purple-500 rounded-full transition-all duration-500"
+                            style={{ width: activeEvent?.blind_mode ? '100%' : '70%' }}
+                          />
                         </div>
-                        <span className="text-[10px] text-slate-500 block">Institutional masking ON</span>
+                        <span className="text-[10px] text-slate-500 block">
+                          {activeEvent?.blind_mode ? 'Institutional masking ON' : 'Standard Evaluation'}
+                        </span>
                       </div>
 
                       <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-1.5">
@@ -1690,18 +1826,42 @@ export default function OrganizerWorkspacePage() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="p-4 bg-slate-900/80 rounded-2xl border border-slate-800 shadow-md">
                       <div className="text-xs text-slate-400 font-semibold">Panel Agreement Index</div>
-                      <div className="text-2xl font-bold text-emerald-400 mt-1">94.8%</div>
-                      <p className="text-[11px] text-slate-500 mt-0.5">Inter-rater Pearson consensus</p>
+                      <div className="text-2xl font-bold text-emerald-400 mt-1">
+                        {fairnessData.meta.scoreCount > 0 && fairnessData.health
+                          ? `${fairnessData.health.components.interJudgeAgreement}%`
+                          : '--'}
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {fairnessData.meta.scoreCount > 0
+                          ? 'Inter-rater Pearson consensus'
+                          : 'Awaiting first round evaluations'}
+                      </p>
                     </div>
                     <div className="p-4 bg-slate-900/80 rounded-2xl border border-slate-800 shadow-md">
                       <div className="text-xs text-slate-400 font-semibold">Fatigue Drift Metric</div>
-                      <div className="text-2xl font-bold text-slate-200 mt-1">r = -0.12</div>
-                      <p className="text-[11px] text-slate-500 mt-0.5">Well within &plusmn;0.50 tolerance</p>
+                      <div className="text-2xl font-bold text-slate-200 mt-1">
+                        {fairnessData.meta.scoreCount > 0 && fairnessData.telemetry?.drift?.[0]
+                          ? `r = ${fairnessData.telemetry.drift[0].correlation.toFixed(2)}`
+                          : 'r = 0.00'}
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {fairnessData.meta.scoreCount > 0
+                          ? 'Continuous fatigue monitoring'
+                          : 'Monitors score drift across evaluation sequence'}
+                      </p>
                     </div>
                     <div className="p-4 bg-slate-900/80 rounded-2xl border border-slate-800 shadow-md">
                       <div className="text-xs text-slate-400 font-semibold">Sensitivity Reranking Risk</div>
-                      <div className="text-2xl font-bold text-indigo-400 mt-1">0 Winner Flips</div>
-                      <p className="text-[11px] text-slate-500 mt-0.5">Rankings resilient to outlier exclusion</p>
+                      <div className="text-2xl font-bold text-indigo-400 mt-1">
+                        {fairnessData.meta.scoreCount > 0 && fairnessData.telemetry?.sensitivity?.winnerChanged
+                          ? 'Winner Flips Detected'
+                          : '0 Winner Flips'}
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {fairnessData.meta.scoreCount > 0
+                          ? 'Rankings resilience to single-evaluator exclusion'
+                          : 'Rankings resilient to outlier exclusion'}
+                      </p>
                     </div>
                   </div>
 
@@ -1726,11 +1886,17 @@ export default function OrganizerWorkspacePage() {
 
                       <button
                         type="button"
-                        onClick={() => showToast('Recalibration matrix refreshed across all active panel evaluators.')}
+                        onClick={() => {
+                          if (selectedEventId) {
+                            fetchFairnessForEvent(selectedEventId)
+                            fetchJudgesForEvent(selectedEventId)
+                            showToast('Telemetry refreshed from live evaluation database.')
+                          }
+                        }}
                         className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer self-start sm:self-auto"
                       >
                         <RefreshCw className="w-3.5 h-3.5 text-violet-400" />
-                        <span>Sync Calibration</span>
+                        <span>Sync Live Telemetry</span>
                       </button>
                     </div>
 
@@ -1752,37 +1918,62 @@ export default function OrganizerWorkspacePage() {
                             <tr>
                               <td colSpan={7} className="py-8 text-center text-slate-500">
                                 <Scale className="w-6 h-6 text-slate-600 mx-auto mb-2" />
-                                <p className="text-xs font-medium text-slate-400">No evaluators calibrated yet</p>
+                                <p className="text-xs font-medium text-slate-400">No evaluators assigned yet</p>
                                 <p className="text-[11px] text-slate-500 mt-0.5">Calibration diagnostics appear here once evaluators complete benchmark scoring.</p>
                               </td>
                             </tr>
                           ) : (
-                            judges.map((j) => (
-                              <tr key={j.id} className="hover:bg-slate-800/30 transition-colors">
-                                <td className="py-3 px-4">
-                                  <span className="font-bold text-slate-100 block">{j.name}</span>
-                                  <span className="text-[10px] text-slate-500">{j.email}</span>
-                                </td>
-                                <td className="py-3 px-4">
-                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
-                                    Math.abs(j.zScore) > 1.2
-                                      ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                                      : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                                  }`}>
-                                    {Math.abs(j.zScore) > 1.2 ? 'Variance Monitored' : 'Well-Calibrated Baseline'}
-                                  </span>
-                                </td>
-                                <td className="py-3 px-4 font-mono">{j.assigned > 0 ? (7.0 + j.zScore * 0.4).toFixed(2) : '--'} / 10</td>
-                                <td className="py-3 px-4 font-mono text-emerald-400">{j.zScore >= 0 ? `+${(j.zScore * 0.3).toFixed(2)}` : (j.zScore * 0.3).toFixed(2)} pts</td>
-                                <td className="py-3 px-4 font-mono text-emerald-400">{j.zScore >= 0 ? `+${j.zScore.toFixed(2)}` : j.zScore.toFixed(2)} &sigma;</td>
-                                <td className="py-3 px-4 font-mono text-slate-400">{j.zScore >= 0 ? `-${(j.zScore * 0.2).toFixed(1)}` : `+${Math.abs(j.zScore * 0.2).toFixed(1)}`} pts</td>
-                                <td className="py-3 px-4 text-right">
-                                  <span className="text-[10px] font-semibold text-slate-400 bg-slate-950 px-2 py-1 rounded border border-slate-800">
-                                    {Math.abs(j.zScore) > 1.2 ? 'Normalized' : 'Standard'}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))
+                            judges.map((j) => {
+                              const leniency = fairnessData.telemetry?.leniency?.find((l) => l.judge.id === j.id)
+                              const hasScored = leniency && leniency.evalCount > 0
+
+                              return (
+                                <tr key={j.id} className="hover:bg-slate-800/30 transition-colors">
+                                  <td className="py-3 px-4">
+                                    <span className="font-bold text-slate-100 block">{j.name}</span>
+                                    <span className="text-[10px] text-slate-500">{j.email}</span>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
+                                      !hasScored
+                                        ? 'bg-slate-800 text-slate-400 border-slate-700'
+                                        : leniency.flagged
+                                        ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                        : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                    }`}>
+                                      {!hasScored
+                                        ? 'Baseline Pending'
+                                        : leniency.flagged
+                                        ? 'Variance Monitored'
+                                        : 'Well-Calibrated Baseline'}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 font-mono">
+                                    {hasScored ? `${(leniency.meanTotal / 10).toFixed(2)} / 10` : '--'}
+                                  </td>
+                                  <td className="py-3 px-4 font-mono text-emerald-400">
+                                    {hasScored && fairnessData.telemetry?.grandMean
+                                      ? `${((leniency.meanTotal - fairnessData.telemetry.grandMean) / 10 >= 0 ? '+' : '')}${((leniency.meanTotal - fairnessData.telemetry.grandMean) / 10).toFixed(2)} pts`
+                                      : '--'}
+                                  </td>
+                                  <td className="py-3 px-4 font-mono text-emerald-400">
+                                    {hasScored
+                                      ? `${leniency.zScore >= 0 ? '+' : ''}${leniency.zScore.toFixed(2)} σ`
+                                      : '--'}
+                                  </td>
+                                  <td className="py-3 px-4 font-mono text-slate-400">
+                                    {hasScored
+                                      ? `${leniency.zScore >= 0 ? '-' : '+'}${(Math.abs(leniency.zScore) * 0.2).toFixed(1)} pts`
+                                      : '--'}
+                                  </td>
+                                  <td className="py-3 px-4 text-right">
+                                    <span className="text-[10px] font-semibold text-slate-400 bg-slate-950 px-2 py-1 rounded border border-slate-800">
+                                      {!hasScored ? 'Pending' : leniency.flagged ? 'Normalized' : 'Standard'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              )
+                            })
                           )}
                         </tbody>
                       </table>

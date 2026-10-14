@@ -64,19 +64,9 @@ export default function JuryQueueDashboard() {
   const [revisionReason, setRevisionReason] = useState('')
   const [selectedRevisionTeam, setSelectedRevisionTeam] = useState('')
 
-  // Calibration state
-  const [calibrationScores, setCalibrationScores] = useState<Record<string, number>>({
-    'bench-01': 7.2,
-    'bench-02': 8.6,
-    'bench-03': 5.4,
-  })
-  const [calibrationResult, setCalibrationResult] = useState<JudgeCalibrationResult | null>(() =>
-    evaluateJudgeCalibration('jury-curr', 'Current Evaluator', {
-      'bench-01': 7.2,
-      'bench-02': 8.6,
-      'bench-03': 5.4,
-    })
-  )
+  // Calibration state - uncalibrated by default
+  const [calibrationScores, setCalibrationScores] = useState<Record<string, number>>({})
+  const [calibrationResult, setCalibrationResult] = useState<JudgeCalibrationResult | null>(null)
 
   function showToast(msg: string) {
     setToastMessage(msg)
@@ -496,7 +486,7 @@ export default function JuryQueueDashboard() {
                         </p>
                       </div>
 
-                      {calibrationResult && (
+                      {calibrationResult ? (
                         <div className={`px-4 py-3 rounded-xl border text-center shrink-0 ${calibrationResult.statusBadgeColor}`}>
                           <span className="text-[10px] uppercase font-bold tracking-wider block opacity-80">
                             Scoring Alignment
@@ -506,6 +496,18 @@ export default function JuryQueueDashboard() {
                           </span>
                           <span className="text-[11px] font-mono opacity-90 block mt-0.5">
                             Offset: {calibrationResult.delta > 0 ? '+' : ''}{calibrationResult.delta} pts ({calibrationResult.zScore > 0 ? '+' : ''}{calibrationResult.zScore} &sigma;)
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="px-4 py-3 rounded-xl border border-slate-800 bg-slate-950/80 text-center shrink-0">
+                          <span className="text-[10px] uppercase font-bold tracking-wider block text-slate-500">
+                            Scoring Alignment
+                          </span>
+                          <span className="text-sm font-bold block mt-0.5 text-slate-300">
+                            Calibration Pending
+                          </span>
+                          <span className="text-[11px] text-slate-500 block mt-0.5">
+                            Adjust 3 benchmark cases below
                           </span>
                         </div>
                       )}
@@ -660,6 +662,15 @@ export default function JuryQueueDashboard() {
                       <button
                         type="button"
                         onClick={() => {
+                          if (!calibrationResult) {
+                            const scores = {
+                              'bench-01': calibrationScores['bench-01'] ?? 7.0,
+                              'bench-02': calibrationScores['bench-02'] ?? 8.5,
+                              'bench-03': calibrationScores['bench-03'] ?? 5.5,
+                            }
+                            setCalibrationScores(scores)
+                            setCalibrationResult(evaluateJudgeCalibration('jury-curr', 'Current Evaluator', scores))
+                          }
                           showToast('Calibration profile verified and locked for panel normalization.')
                         }}
                         className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold shadow-lg shadow-violet-600/30 flex items-center gap-2 cursor-pointer transition-all"

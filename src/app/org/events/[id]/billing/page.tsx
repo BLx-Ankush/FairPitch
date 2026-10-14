@@ -125,11 +125,93 @@ export default function EventBillingPage({
     }
   }
 
-  async function handleSimulatePayment() {
+  async function handleCompletePayment() {
     if (!orderData) return
     setProcessingPayment(true)
     setPaymentError(null)
 
+    // 1. If running in live mode with valid Razorpay credentials, launch standard Razorpay Checkout
+    if (!orderData.isMock) {
+      try {
+        const loadScript = () => {
+          return new Promise((resolve) => {
+            if ((window as any).Razorpay) return resolve(true)
+            const script = document.createElement('script')
+            script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+            script.onload = () => resolve(true)
+            script.onerror = () => resolve(false)
+            document.body.appendChild(script)
+          })
+        }
+
+        const scriptLoaded = await loadScript()
+        if (!scriptLoaded) {
+          throw new Error('Razorpay SDK failed to load. Please check your internet connection.')
+        }
+
+        const options = {
+          key: orderData.keyId,
+          amount: orderData.amount,
+          currency: orderData.currency,
+          name: 'FairPitch Platform',
+          description: `Tier Upgrade: ${selectedTier.toUpperCase()}`,
+          order_id: orderData.order.id,
+          handler: async function (response: any) {
+            try {
+              const res = await fetch('/api/payments/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  invoiceId: orderData.invoiceId,
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpaySignature: response.razorpay_signature,
+                }),
+              })
+
+              const data = await res.json()
+              if (!res.ok) {
+                throw new Error(data.error || 'Payment signature verification failed')
+              }
+
+              setPaymentSuccess(true)
+              await fetchBillingData()
+              setTimeout(() => {
+                setCheckoutModalOpen(false)
+                setPaymentSuccess(false)
+                setOrderData(null)
+              }, 2500)
+            } catch (verErr: any) {
+              setPaymentError(verErr.message || 'Payment signature verification failed')
+            } finally {
+              setProcessingPayment(false)
+            }
+          },
+          modal: {
+            ondismiss: function () {
+              setProcessingPayment(false)
+            },
+          },
+          theme: {
+            color: '#4f46e5',
+          },
+        }
+
+        const rzp = new (window as any).Razorpay(options)
+        rzp.on('payment.failed', function (resp: any) {
+          setPaymentError(resp.error?.description || 'Payment failed')
+          setProcessingPayment(false)
+        })
+        rzp.open()
+        return
+      } catch (err: any) {
+        setPaymentError(err.message || 'Failed to initialize Razorpay checkout')
+        setProcessingPayment(false)
+        return
+      }
+    }
+
+    // 2. Fallback sandbox simulation for offline development
     try {
       const mockPaymentId = `pay_mock_${Date.now()}`
       const mockSignature = `sig_mock_${Date.now()}`
@@ -158,7 +240,7 @@ export default function EventBillingPage({
         setOrderData(null)
       }, 2500)
     } catch (err: any) {
-      setPaymentError(err.message || 'Payment simulation failed')
+      setPaymentError(err.message || 'Payment verification failed')
     } finally {
       setProcessingPayment(false)
     }
@@ -548,7 +630,7 @@ export default function EventBillingPage({
 
                 <div className="space-y-2 pt-2">
                   <button
-                    onClick={handleSimulatePayment}
+                    onClick={handleCompletePayment}
                     disabled={processingPayment}
                     className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer"
                   >
@@ -560,7 +642,11 @@ export default function EventBillingPage({
                     ) : (
                       <>
                         <Zap className="w-4 h-4 text-amber-300" />
-                        <span>Confirm & Complete Payment (Razorpay)</span>
+                        <span>
+                          {orderData.isMock
+                            ? 'Complete Test Payment (Sandbox Simulation)'
+                            : 'Pay with Razorpay Gateway'}
+                        </span>
                       </>
                     )}
                   </button>
