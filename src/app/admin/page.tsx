@@ -61,11 +61,15 @@ interface EventTimeline {
 interface AdminEvent {
   id: string
   title: string
+  slug?: string
+  event_code?: string
   status: string
   timeline: EventTimeline
   merkleRoot: string
   chainVerified: boolean
   totalBlocks: number
+  startDate?: string
+  endDate?: string
 }
 
 interface JudgeProgress {
@@ -82,6 +86,18 @@ interface PendingOrganizer {
   fullName: string
   email: string
   appliedAt: string
+}
+
+interface PendingEvent {
+  id: string
+  title: string
+  slug?: string
+  event_code?: string
+  status: string
+  createdAt: string
+  createdBy?: string
+  tracksCount?: number
+  rubricCount?: number
 }
 
 interface EditRequest {
@@ -115,6 +131,7 @@ interface DashboardData {
   judgesProgress: JudgeProgress[]
   approvalsQueue: {
     pendingOrganizers: PendingOrganizer[]
+    pendingEvents?: PendingEvent[]
     editRequests: EditRequest[]
     reviewRequests: ReviewRequest[]
   }
@@ -145,7 +162,8 @@ export default function AdminDashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [currentView, setCurrentView] = useState<AdminNavView>('overview')
-  const [activeQueueTab, setActiveQueueTab] = useState<'organizers' | 'edits' | 'reviews'>('organizers')
+  const [activeQueueTab, setActiveQueueTab] = useState<'events' | 'organizers' | 'edits' | 'reviews'>('events')
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [copiedRoot, setCopiedRoot] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [isClient, setIsClient] = useState(false)
@@ -228,6 +246,50 @@ export default function AdminDashboardPage() {
     }
   }
 
+  async function handleApproveEvent(eventId: string) {
+    setActionLoading(eventId)
+    try {
+      const res = await fetch('/api/admin/events/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) {
+        showToast(d.message || 'Event approved and is now LIVE for registrations!')
+        await fetchDashboardData()
+      } else {
+        showToast(d.error || 'Failed to approve event')
+      }
+    } catch {
+      showToast('Network error while approving event')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  async function handleTransitionEvent(eventId: string, newStatus: string) {
+    setActionLoading(eventId)
+    try {
+      const res = await fetch(`/api/events/${eventId}/transition`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newStatus }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) {
+        showToast(`Event transitioned to ${newStatus.toUpperCase()} successfully!`)
+        await fetchDashboardData()
+      } else {
+        showToast(d.error || 'Failed to transition event')
+      }
+    } catch {
+      showToast('Network error while transitioning event')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   async function handleSignOut() {
     await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
     router.push('/auth?role=admin')
@@ -239,10 +301,14 @@ export default function AdminDashboardPage() {
     setTimeout(() => setCopiedRoot(false), 2000)
   }
 
-  const primaryEvent = data?.events?.[0]
+  const primaryEvent =
+    (selectedEventId ? data?.events?.find((e) => e.id === selectedEventId) : data?.events?.[0]) ||
+    data?.events?.[0]
   const isReviewOrPublished = primaryEvent?.status === 'review' || primaryEvent?.status === 'published'
   const totalPendingApprovals =
-    (data?.approvalsQueue.pendingOrganizers.length || 0) + (data?.registrations.pendingApprovals || 0)
+    (data?.approvalsQueue.pendingOrganizers.length || 0) +
+    (data?.approvalsQueue.pendingEvents?.length || 0) +
+    (data?.registrations.pendingApprovals || 0)
 
   const chartColors = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6']
 
@@ -544,7 +610,7 @@ export default function AdminDashboardPage() {
                     </div>
 
                     <div
-                      onClick={() => setCurrentView('organizers')}
+                      onClick={() => setCurrentView('disputes')}
                       className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden group hover:border-slate-700 transition-all cursor-pointer"
                     >
                       <div className="flex items-center justify-between text-slate-400 mb-2">
@@ -554,10 +620,13 @@ export default function AdminDashboardPage() {
                         </div>
                       </div>
                       <div className="text-2xl font-bold text-amber-400">
-                        {data.approvalsQueue.pendingOrganizers.length + data.registrations.pendingApprovals}
+                        {data.approvalsQueue.pendingOrganizers.length +
+                          (data.approvalsQueue.pendingEvents?.length || 0) +
+                          data.registrations.pendingApprovals}
                       </div>
                       <p className="text-xs text-slate-400 mt-1">
-                        {data.approvalsQueue.pendingOrganizers.length} organizers, {data.registrations.pendingApprovals} teams
+                        {data.approvalsQueue.pendingOrganizers.length} organizers,{' '}
+                        {data.approvalsQueue.pendingEvents?.length || 0} events, {data.registrations.pendingApprovals} teams
                       </p>
                     </div>
 
@@ -600,23 +669,116 @@ export default function AdminDashboardPage() {
                   {/* Primary Event Mini-Timeline Card */}
                   {primaryEvent ? (
                     <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-6 shadow-xl space-y-4">
-                      <div className="flex items-center justify-between">
+                      {data.events && data.events.length > 1 && (
+                        <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-800/80">
+                          <span className="text-[11px] text-slate-400 font-medium shrink-0">Select Event:</span>
+                          {data.events.map((evt) => (
+                            <button
+                              key={evt.id}
+                              onClick={() => setSelectedEventId(evt.id)}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                                primaryEvent.id === evt.id
+                                  ? 'bg-indigo-600 text-white shadow-sm'
+                                  : 'bg-slate-800/70 text-slate-400 hover:text-slate-200'
+                              }`}
+                            >
+                              {evt.title} ({evt.status})
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
                           <h3 className="text-base font-semibold text-slate-100 flex items-center gap-2">
                             <span>{primaryEvent.title}</span>
-                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 capitalize">
-                              Current: {primaryEvent.status}
-                            </span>
+                            {primaryEvent.status === 'open' ? (
+                              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1.5 shadow-sm">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                                <span>LIVE & AIRING</span>
+                              </span>
+                            ) : primaryEvent.status === 'draft' ? (
+                              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                Draft Pending Approval
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 capitalize">
+                                Stage: {primaryEvent.status}
+                              </span>
+                            )}
                           </h3>
                           <p className="text-xs text-slate-400 mt-0.5">Active institutional judging cycle</p>
                         </div>
-                        <button
-                          onClick={() => setCurrentView('timeline')}
-                          className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1"
-                        >
-                          <span>Full Timeline View</span>
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
+
+                        <div className="flex items-center gap-2.5">
+                          {primaryEvent.status === 'draft' && (
+                            <button
+                              onClick={() => handleApproveEvent(primaryEvent.id)}
+                              disabled={actionLoading === primaryEvent.id}
+                              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-600/30"
+                            >
+                              {actionLoading === primaryEvent.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                              )}
+                              <span>Approve & Air Live</span>
+                            </button>
+                          )}
+
+                          {primaryEvent.status === 'open' && (
+                            <button
+                              onClick={() => handleTransitionEvent(primaryEvent.id, 'judging')}
+                              disabled={actionLoading === primaryEvent.id}
+                              className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1 shadow-md shadow-indigo-600/20"
+                            >
+                              {actionLoading === primaryEvent.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              )}
+                              <span>Advance to Blind Judging</span>
+                            </button>
+                          )}
+
+                          {primaryEvent.status === 'judging' && (
+                            <button
+                              onClick={() => handleTransitionEvent(primaryEvent.id, 'review')}
+                              disabled={actionLoading === primaryEvent.id}
+                              className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1 shadow-md shadow-indigo-600/20"
+                            >
+                              {actionLoading === primaryEvent.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              )}
+                              <span>Advance to Review</span>
+                            </button>
+                          )}
+
+                          {primaryEvent.status === 'review' && (
+                            <button
+                              onClick={() => handleTransitionEvent(primaryEvent.id, 'published')}
+                              disabled={actionLoading === primaryEvent.id}
+                              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1 shadow-md shadow-emerald-600/20"
+                            >
+                              {actionLoading === primaryEvent.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <ShieldCheck className="w-3.5 h-3.5" />
+                              )}
+                              <span>Publish Standings</span>
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => setCurrentView('timeline')}
+                            className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 ml-1"
+                          >
+                            <span>Timeline</span>
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
@@ -762,6 +924,117 @@ export default function AdminDashboardPage() {
               {currentView === 'timeline' && (
                 primaryEvent ? (
                   <div className="space-y-6">
+                    {data.events && data.events.length > 1 && (
+                      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex items-center gap-3 overflow-x-auto">
+                        <span className="text-xs text-slate-400 font-semibold shrink-0">Select Event Cycle:</span>
+                        {data.events.map((evt) => (
+                          <button
+                            key={evt.id}
+                            onClick={() => setSelectedEventId(evt.id)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                              primaryEvent.id === evt.id
+                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                                : 'bg-slate-800/80 text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            {evt.title} ({evt.status})
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Stage Controller Action Bar */}
+                    <div className="bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900 border border-indigo-500/30 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2.5">
+                          <h3 className="text-base font-bold text-slate-100">{primaryEvent.title}</h3>
+                          {primaryEvent.status === 'open' ? (
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                              <span>LIVE & AIRING</span>
+                            </span>
+                          ) : primaryEvent.status === 'draft' ? (
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              Draft Pending Approval
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 capitalize">
+                              Stage: {primaryEvent.status}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {primaryEvent.status === 'draft' && 'This event has not been approved or aired yet. Click Approve to launch it live.'}
+                          {primaryEvent.status === 'open' && 'Event is live for team registrations and project submissions.'}
+                          {primaryEvent.status === 'judging' && 'Jury members are evaluating submissions. Individual scores are sealed.'}
+                          {primaryEvent.status === 'review' && 'Jury scoring completed. Anomaly detection and audit simulations available.'}
+                          {primaryEvent.status === 'published' && 'Event finalized with Merkle root anchored to the public verification ledger.'}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0">
+                        {primaryEvent.status === 'draft' && (
+                          <button
+                            onClick={() => handleApproveEvent(primaryEvent.id)}
+                            disabled={actionLoading === primaryEvent.id}
+                            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/30"
+                          >
+                            {actionLoading === primaryEvent.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="w-4 h-4" />
+                            )}
+                            <span>Approve & Air Live</span>
+                          </button>
+                        )}
+
+                        {primaryEvent.status === 'open' && (
+                          <button
+                            onClick={() => handleTransitionEvent(primaryEvent.id, 'judging')}
+                            disabled={actionLoading === primaryEvent.id}
+                            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-indigo-600/20"
+                          >
+                            {actionLoading === primaryEvent.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4" />
+                            )}
+                            <span>Advance to Blind Judging</span>
+                          </button>
+                        )}
+
+                        {primaryEvent.status === 'judging' && (
+                          <button
+                            onClick={() => handleTransitionEvent(primaryEvent.id, 'review')}
+                            disabled={actionLoading === primaryEvent.id}
+                            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-indigo-600/20"
+                          >
+                            {actionLoading === primaryEvent.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4" />
+                            )}
+                            <span>Advance to Review</span>
+                          </button>
+                        )}
+
+                        {primaryEvent.status === 'review' && (
+                          <button
+                            onClick={() => handleTransitionEvent(primaryEvent.id, 'published')}
+                            disabled={actionLoading === primaryEvent.id}
+                            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
+                          >
+                            {actionLoading === primaryEvent.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <ShieldCheck className="w-4 h-4" />
+                            )}
+                            <span>Publish & Anchor Merkle</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
                     <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
                       <div>
                         <h3 className="text-base font-bold text-slate-100">
@@ -1045,10 +1318,20 @@ export default function AdminDashboardPage() {
               {currentView === 'disputes' && (
                 <div className="space-y-6">
                   <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                    <div className="flex border-b border-slate-800 text-xs">
+                    <div className="flex border-b border-slate-800 text-xs overflow-x-auto">
+                      <button
+                        onClick={() => setActiveQueueTab('events')}
+                        className={`pb-2.5 px-4 font-semibold border-b-2 cursor-pointer whitespace-nowrap ${
+                          activeQueueTab === 'events'
+                            ? 'border-indigo-500 text-indigo-400'
+                            : 'border-transparent text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Pending Events ({data.approvalsQueue.pendingEvents?.length || 0})
+                      </button>
                       <button
                         onClick={() => setActiveQueueTab('organizers')}
-                        className={`pb-2.5 px-4 font-semibold border-b-2 cursor-pointer ${
+                        className={`pb-2.5 px-4 font-semibold border-b-2 cursor-pointer whitespace-nowrap ${
                           activeQueueTab === 'organizers'
                             ? 'border-indigo-500 text-indigo-400'
                             : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -1058,7 +1341,7 @@ export default function AdminDashboardPage() {
                       </button>
                       <button
                         onClick={() => setActiveQueueTab('edits')}
-                        className={`pb-2.5 px-4 font-semibold border-b-2 cursor-pointer ${
+                        className={`pb-2.5 px-4 font-semibold border-b-2 cursor-pointer whitespace-nowrap ${
                           activeQueueTab === 'edits'
                             ? 'border-indigo-500 text-indigo-400'
                             : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -1068,7 +1351,7 @@ export default function AdminDashboardPage() {
                       </button>
                       <button
                         onClick={() => setActiveQueueTab('reviews')}
-                        className={`pb-2.5 px-4 font-semibold border-b-2 cursor-pointer ${
+                        className={`pb-2.5 px-4 font-semibold border-b-2 cursor-pointer whitespace-nowrap ${
                           activeQueueTab === 'reviews'
                             ? 'border-indigo-500 text-indigo-400'
                             : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -1079,6 +1362,52 @@ export default function AdminDashboardPage() {
                     </div>
 
                     <div className="space-y-3 pt-2">
+                      {activeQueueTab === 'events' && (
+                        <div className="space-y-3">
+                          {(!data.approvalsQueue.pendingEvents || data.approvalsQueue.pendingEvents.length === 0) ? (
+                            <div className="py-8 text-center text-xs text-slate-500">
+                              No draft events awaiting administrative approval. All approved events are currently live.
+                            </div>
+                          ) : (
+                            data.approvalsQueue.pendingEvents.map((evt) => (
+                              <div
+                                key={evt.id}
+                                className="p-4 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs"
+                              >
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-slate-100 text-sm">{evt.title}</span>
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 uppercase">
+                                      {evt.status}
+                                    </span>
+                                  </div>
+                                  <div className="text-[11px] text-slate-400">
+                                    Slug: <code className="text-slate-300">/{evt.slug}</code> &#183; Tracks: {evt.tracksCount || 1} &#183; Criteria: {evt.rubricCount || 0}
+                                  </div>
+                                  <div className="text-[10px] text-slate-500">
+                                    Created: {new Date(evt.createdAt).toLocaleDateString()}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 self-start sm:self-auto">
+                                  <button
+                                    onClick={() => handleApproveEvent(evt.id)}
+                                    disabled={actionLoading === evt.id}
+                                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
+                                  >
+                                    {actionLoading === evt.id ? (
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    ) : (
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                    )}
+                                    <span>Approve & Air Live</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+
                       {activeQueueTab === 'edits' && (
                         <>
                           {data.approvalsQueue.editRequests.length === 0 ? (
@@ -1125,20 +1454,26 @@ export default function AdminDashboardPage() {
 
                       {activeQueueTab === 'organizers' && (
                         <div className="space-y-3">
-                          {data.approvalsQueue.pendingOrganizers.map((org) => (
-                            <div key={org.id} className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
-                              <div>
-                                <div className="font-semibold text-slate-200">{org.fullName}</div>
-                                <div className="text-[11px] text-slate-400">{org.email}</div>
-                              </div>
-                              <button
-                                onClick={() => handleApproveOrganizer(org.id)}
-                                className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs"
-                              >
-                                Approve
-                              </button>
+                          {data.approvalsQueue.pendingOrganizers.length === 0 ? (
+                            <div className="py-8 text-center text-xs text-slate-500">
+                              No pending organizer applications. All candidates verified.
                             </div>
-                          ))}
+                          ) : (
+                            data.approvalsQueue.pendingOrganizers.map((org) => (
+                              <div key={org.id} className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+                                <div>
+                                  <div className="font-semibold text-slate-200">{org.fullName}</div>
+                                  <div className="text-[11px] text-slate-400">{org.email}</div>
+                                </div>
+                                <button
+                                  onClick={() => handleApproveOrganizer(org.id)}
+                                  className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs"
+                                >
+                                  Approve
+                                </button>
+                              </div>
+                            ))
+                          )}
                         </div>
                       )}
                     </div>

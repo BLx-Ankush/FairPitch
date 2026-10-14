@@ -109,6 +109,22 @@ class MemoryCache {
   }
 
   /**
+   * Alias for invalidate(key).
+   */
+  delete(key: string): void {
+    this.invalidate(key)
+  }
+
+  /**
+   * Invalidates multiple tags in one call.
+   */
+  invalidateTags(tags: string[]): void {
+    for (const tag of tags) {
+      this.invalidateTag(tag)
+    }
+  }
+
+  /**
    * Clears entire cache.
    */
   clear(): void {

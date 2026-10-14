@@ -56,6 +56,14 @@ export async function GET(request: Request) {
         let role: 'institution_admin' | 'user' = 'user'
         let organizerStatus: 'none' | 'pending' | 'approved' = 'none'
 
+        const { data: defaultInst } = await serviceClient
+          .from('institutions')
+          .select('id')
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+        const assignedInstitutionId = defaultInst?.id || 'a0000000-0000-0000-0000-000000000001'
+
         if (accountType === 'institution_admin' || accountType === 'admin') {
           role = 'institution_admin'
           organizerStatus = 'approved'
@@ -76,6 +84,7 @@ export async function GET(request: Request) {
           full_name: fullName,
           role,
           organizer_approval_status: organizerStatus,
+          institution_id: accountType === 'organizer' || accountType === 'admin' || accountType === 'institution_admin' ? assignedInstitutionId : null,
         })
       } else {
         // If already existing, route to appropriate dashboard

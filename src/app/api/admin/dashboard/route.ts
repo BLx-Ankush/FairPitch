@@ -94,19 +94,32 @@ export async function GET() {
     let pendingOrganizers: any[] = []
     let orgQuery = serviceClient
       .from('profiles')
-      .select('id, full_name, email, created_at')
+      .select('id, full_name, email, created_at, institution_id')
       .eq('organizer_approval_status', 'pending')
 
     if (institutionId && profile.role !== 'platform_owner') {
-      orgQuery = orgQuery.eq('institution_id', institutionId)
+      orgQuery = orgQuery.or(`institution_id.eq.${institutionId},institution_id.is.null`)
     }
     const { data: pendingOrgs } = await orgQuery
     pendingOrganizers = (pendingOrgs || []).map((p) => ({
       id: p.id,
-      fullName: p.full_name,
+      fullName: p.full_name || 'Organizer Applicant',
       email: p.email,
       appliedAt: p.created_at,
     }))
+
+    // Draft / Pending Events awaiting Admin Approval to go live
+    const pendingEvents = (events || [])
+      .filter((e) => e.status === 'draft')
+      .map((e) => ({
+        id: e.id,
+        title: e.title,
+        slug: e.slug,
+        event_code: e.event_code,
+        status: e.status,
+        createdAt: e.created_at,
+        createdBy: e.created_by,
+      }))
 
     let editRequests: any[] = []
     let reviewRequests: any[] = []
@@ -141,19 +154,24 @@ export async function GET() {
       }))
     }
 
-    // Format events with stage timelines
+    // Format events with stage timelines (mapping accurate database statuses: draft -> open -> judging -> review -> published)
     const formattedEvents = (events || []).map((evt) => {
       const st = evt.status || 'draft'
       return {
         id: evt.id,
         title: evt.title,
+        slug: evt.slug,
+        event_code: evt.event_code,
         status: st,
+        startDate: evt.start_date,
+        endDate: evt.end_date,
+        createdAt: evt.created_at,
         timeline: {
-          draft: { date: evt.created_at?.slice(0, 10) || '2026-09-01', completed: true },
-          open: { date: '2026-09-15', completed: ['registration', 'scoring', 'review', 'published'].includes(st) },
-          judging: { date: '2026-10-01', completed: ['scoring', 'review', 'published'].includes(st), active: st === 'scoring' },
-          review: { date: '2026-10-04', completed: ['review', 'published'].includes(st), active: st === 'review' },
-          published: { date: '2026-10-05', completed: st === 'published', active: st === 'published' },
+          draft: { date: evt.created_at?.slice(0, 10) || '2026-09-01', completed: true, active: st === 'draft' },
+          open: { date: evt.start_date?.slice(0, 10) || '2026-09-15', completed: ['open', 'judging', 'review', 'published'].includes(st), active: st === 'open' },
+          judging: { date: evt.start_date?.slice(0, 10) || '2026-10-01', completed: ['judging', 'review', 'published'].includes(st), active: st === 'judging' },
+          review: { date: evt.end_date?.slice(0, 10) || '2026-10-04', completed: ['review', 'published'].includes(st), active: st === 'review' },
+          published: { date: evt.end_date?.slice(0, 10) || '2026-10-05', completed: st === 'published', active: st === 'published' },
         },
         merkleRoot: evt.anchored_merkle_root || evt.merkle_root || null,
         chainVerified: Boolean(evt.anchored_merkle_root || evt.merkle_root),
@@ -174,6 +192,7 @@ export async function GET() {
       judgesProgress,
       approvalsQueue: {
         pendingOrganizers,
+        pendingEvents,
         editRequests,
         reviewRequests,
       },

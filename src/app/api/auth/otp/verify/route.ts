@@ -50,12 +50,21 @@ export async function POST(request: Request) {
         const role = accountType === 'admin' ? 'institution_admin' : 'user'
         const organizerStatus = accountType === 'organizer' ? 'pending' : 'none'
 
+        const { data: defaultInst } = await serviceClient
+          .from('institutions')
+          .select('id')
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+        const assignedInstId = defaultInst?.id || 'a0000000-0000-0000-0000-000000000001'
+
         await serviceClient.from('profiles').insert({
           id: data.user.id,
           email: cleanEmail,
           full_name: cleanEmail.split('@')[0],
           role,
           organizer_approval_status: organizerStatus,
+          institution_id: accountType === 'organizer' || accountType === 'admin' ? assignedInstId : null,
         })
 
         targetDest =

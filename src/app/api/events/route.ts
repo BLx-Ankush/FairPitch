@@ -1,16 +1,26 @@
 import { NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase/service-role'
 import { getAuthUser, getUserProfile } from '@/lib/auth/session'
+import { memoryCache } from '@/lib/cache/memory-cache'
 
 export async function GET() {
   try {
+    const serviceClient = getServiceSupabase()
     const user = await getAuthUser()
 
+    // Public / Unauthenticated callers can view public events (open, judging, review, published)
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+      const { data: pubEvents, error: pubErr } = await serviceClient
+        .from('events')
+        .select('*, institutions(name)')
+        .in('status', ['open', 'judging', 'review', 'published'])
+        .order('created_at', { ascending: false })
 
-    const serviceClient = getServiceSupabase()
+      if (pubErr) {
+        return NextResponse.json({ error: pubErr.message }, { status: 500 })
+      }
+      return NextResponse.json({ success: true, events: pubEvents || [] })
+    }
     const profile = await getUserProfile(user.id)
 
     const query = serviceClient
@@ -191,6 +201,9 @@ export async function POST(request: Request) {
       },
       { onConflict: 'event_id,user_id,role' }
     )
+
+    // Invalidate events cache
+    memoryCache.invalidateTags(['events'])
 
     return NextResponse.json({ success: true, event: enrichedEvent })
   } catch (err: any) {

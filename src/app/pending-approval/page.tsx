@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Clock, ShieldAlert, RefreshCw, LogOut, CheckCircle2 } from 'lucide-react'
 
@@ -8,6 +8,14 @@ export default function PendingApprovalPage() {
   const router = useRouter()
   const [checking, setChecking] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    checkStatus()
+    const timer = setInterval(() => {
+      checkStatus()
+    }, 3000)
+    return () => clearInterval(timer)
+  }, [])
 
   async function checkStatus() {
     setChecking(true)
@@ -18,12 +26,12 @@ export default function PendingApprovalPage() {
       if (res.ok) {
         const data = await res.json()
         if (data.organizerStatus === 'approved') {
-          setStatusMessage('Your account has been approved! Redirecting...')
-          setTimeout(() => router.push('/org'), 1200)
+          setStatusMessage('Your account has been approved! Redirecting to Organizer Console...')
+          setTimeout(() => router.push('/org'), 1000)
           return
         }
       }
-      setStatusMessage('Your application is still under review by your Institution Administrator.')
+      setStatusMessage('Your application is currently queued for review by your Institution Administrator.')
     } catch {
       setStatusMessage('Unable to check status at this time. Please try again later.')
     } finally {
